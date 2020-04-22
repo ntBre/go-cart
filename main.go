@@ -1,10 +1,22 @@
 package main
 
 import (
+	"errors"
 	"io/ioutil"
 	"regexp"
-	"strings"
 	"strconv"
+	"strings"
+	"os"
+)
+
+const (
+	energyLine  = "energy="
+	brokenFloat = 999.999
+)
+
+var (
+	ErrEnergyNotFound = errors.New("Energy not found in Molpro output")
+	ErrFileNotFound = errors.New("Molpro output file not found")
 )
 
 type Geometry struct {
@@ -12,26 +24,37 @@ type Geometry struct {
 	Coords []float64
 }
 
-func ReadInputXYZ(filename string) Geometry {
+func ReadFile(filename string) []string {
 	lines, err := ioutil.ReadFile(filename)
-	re := regexp.MustCompile(`\s+`)
-	names := make([]string, 0)
-	coords := make([]float64, 0)
 	if err != nil {
 		panic(err)
 	}
-	split := strings.Split(strings.TrimSpace(string(lines)), "\n")
+	return strings.Split(strings.TrimSpace(string(lines)), "\n")
+}
+
+func SplitLine(line string) []string {
+	re := regexp.MustCompile(`\s+`)
+	trim := strings.TrimSpace(line)
+	s := strings.Split(strings.TrimSpace(re.ReplaceAllString(trim, " ")), " ")
+	return s
+}
+
+func ReadInputXYZ(filename string) Geometry {
 	// skip the natoms and comment line in xyz file
+	split := ReadFile(filename)
+	names := make([]string, 0)
+	coords := make([]float64, 0)
 	for _, v := range split[2:] {
-		trim := strings.TrimSpace(v)
-		s := strings.Split(strings.TrimSpace(re.ReplaceAllString(trim, " ")), " ")
-		names = append(names, s[0])
-		for _, c := range s[1:4] {
-			f, e := strconv.ParseFloat(c, 64)
-			if e != nil {
-				panic(e)
+		s := SplitLine(v)
+		if len(s) == 4 {
+			names = append(names, s[0])
+			for _, c := range s[1:4] {
+				f, e := strconv.ParseFloat(c, 64)
+				if e != nil {
+					panic(e)
+				}
+				coords = append(coords, f)
 			}
-			coords = append(coords, f)
 		}
 	}
 	return Geometry{names, coords}
@@ -62,7 +85,7 @@ func MakeMolproIn(geom *Geometry) []string {
 	for i, _ := range geom.Names {
 		tmp := make([]string, 0)
 		tmp = append(tmp, geom.Names[i])
-		for _, c := range geom.Coords[3*i:3*i+3] {
+		for _, c := range geom.Coords[3*i : 3*i+3] {
 			s := strconv.FormatFloat(c, 'f', 10, 64)
 			tmp = append(tmp, s)
 		}
@@ -81,4 +104,22 @@ func WriteMolproIn(filename string, geom *Geometry) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func ReadMolproOut(filename string) (float64, error) {
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return brokenFloat, ErrFileNotFound
+	}
+	lines := ReadFile(filename)
+	for _, line := range lines {
+		if strings.Contains(line, energyLine) {
+			split := SplitLine(line)
+			f, err := strconv.ParseFloat(split[len(split)-1], 64)
+			if err != nil {
+				panic(err)
+			}
+			return f, nil
+		}
+	}
+	return brokenFloat, ErrEnergyNotFound
 }
