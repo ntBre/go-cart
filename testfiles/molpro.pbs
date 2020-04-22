@@ -1,0 +1,20 @@
+#!/bin/sh
+#PBS -N go-cart
+#PBS -S /bin/bash
+#PBS -j oe
+#PBS -W umask=022
+#PBS -l walltime=00:30:00
+#PBS -l ncpus=1
+#PBS -l mem=50mb
+module load intel
+module load mvapich2
+module load pbspro
+export PATH=/usr/local/apps/molpro/2015.1.35/bin:$PATH
+export WORKDIR=$PBS_O_WORKDIR
+export TMPDIR=/tmp/$USER/$PBS_JOBID
+cd $WORKDIR
+mkdir -p $TMPDIR
+date
+molpro -t 1 molpro.in
+date
+rm -rf $TMPDIR

@@ -1,0 +1,4 @@
+* Should implement the pbs file writing as an interface
+  - to allow the same functions on different queues with different head/foot
+    
+* Should do something similar for writing molpro input

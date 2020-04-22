@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"os"
+	"os/exec"
+	"path"
 )
 
 const (
@@ -77,11 +79,16 @@ func MakeMolproFoot() []string {
 		"{CCSD(T)-F12}"}
 }
 
-func MakeMolproIn(geom *Geometry) []string {
+func MakeInput(head, foot func() []string, body []string) []string {
 	file := make([]string, 0)
-	for _, line := range MakeMolproHead() {
-		file = append(file, line)
-	}
+	file = append(file, head()...)
+	file = append(file, body...)
+	file = append(file, foot()...)
+	return file
+}
+
+func MakeMolproIn(geom *Geometry) []string {
+	body := make([]string, 0)
 	for i, _ := range geom.Names {
 		tmp := make([]string, 0)
 		tmp = append(tmp, geom.Names[i])
@@ -89,12 +96,9 @@ func MakeMolproIn(geom *Geometry) []string {
 			s := strconv.FormatFloat(c, 'f', 10, 64)
 			tmp = append(tmp, s)
 		}
-		file = append(file, strings.Join(tmp, " "))
+		body = append(body, strings.Join(tmp, " "))
 	}
-	for _, line := range MakeMolproFoot() {
-		file = append(file, line)
-	}
-	return file
+	return MakeInput(MakeMolproHead, MakeMolproFoot, body)
 }
 
 func WriteMolproIn(filename string, geom *Geometry) {
@@ -122,4 +126,62 @@ func ReadMolproOut(filename string) (float64, error) {
 		}
 	}
 	return brokenFloat, ErrEnergyNotFound
+}
+
+func Basename(filename string) string {
+	file := path.Base(filename)
+	re := regexp.MustCompile(path.Ext(file))
+	basename := re.ReplaceAllString(file, "")
+	return basename
+}
+
+func Qsubmit(filename string) int {
+	pbsname := filename + ".pbs"
+	cmd := exec.Command("qsub",  pbsname)
+	out, err := cmd.Output()
+	if err != nil {
+		panic(err)
+	}
+	b := Basename(string(out))
+	i, _ := strconv.Atoi(b)
+	return i
+}
+
+func MakePBSHead() []string {
+	return []string{"#!/bin/sh",
+		"#PBS -N go-cart",
+		"#PBS -S /bin/bash",
+		"#PBS -j oe",
+		"#PBS -W umask=022",
+		"#PBS -l walltime=00:30:00",
+		"#PBS -l ncpus=1",
+		"#PBS -l mem=50mb",
+		"module load intel",
+		"module load mvapich2",
+		"module load pbspro",
+		"export PATH=/usr/local/apps/molpro/2015.1.35/bin:$PATH",
+		"export WORKDIR=$PBS_O_WORKDIR",
+		"export TMPDIR=/tmp/$USER/$PBS_JOBID",
+		"cd $WORKDIR",
+		"mkdir -p $TMPDIR",
+		"date"}
+}
+
+func MakePBSFoot() []string {
+	return []string{"date",
+		"rm -rf $TMPDIR"}
+}
+
+func MakePBS(filename string) []string {
+	body := []string{"molpro -t 1 " + filename}
+	return MakeInput(MakePBSHead, MakePBSFoot, body)
+}	
+
+func WritePBS(pbsfile, molprofile string) {
+	lines := MakePBS(molprofile)
+	writelines := strings.Join(lines, "\n")
+	err := ioutil.WriteFile(pbsfile, []byte(writelines), 0755)
+	if err != nil {
+		panic(err)
+	}
 }
