@@ -2,13 +2,14 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
-	"regexp"
-	"strconv"
-	"strings"
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -18,12 +19,22 @@ const (
 
 var (
 	ErrEnergyNotFound = errors.New("Energy not found in Molpro output")
-	ErrFileNotFound = errors.New("Molpro output file not found")
+	ErrFileNotFound   = errors.New("Molpro output file not found")
+	delta             = 0.5
 )
 
-type Geometry struct {
-	Names  []string
-	Coords []float64
+func Step(atoms []string, coords []float64, steps ...int) []float64 {
+	var c = make([]float64, len(coords))
+	copy(c, coords)
+	for _, v := range steps {
+		if v < 0 {
+			v = -1 * v
+			c[v-1] = c[v-1] - delta
+		} else {
+			c[v-1] += delta
+		}
+	}
+	return c
 }
 
 func ReadFile(filename string) []string {
@@ -41,7 +52,7 @@ func SplitLine(line string) []string {
 	return s
 }
 
-func ReadInputXYZ(filename string) Geometry {
+func ReadInputXYZ(filename string) ([]string, []float64) {
 	// skip the natoms and comment line in xyz file
 	split := ReadFile(filename)
 	names := make([]string, 0)
@@ -59,7 +70,7 @@ func ReadInputXYZ(filename string) Geometry {
 			}
 		}
 	}
-	return Geometry{names, coords}
+	return names, coords
 }
 
 func MakeMolproHead() []string {
@@ -87,12 +98,12 @@ func MakeInput(head, foot func() []string, body []string) []string {
 	return file
 }
 
-func MakeMolproIn(geom *Geometry) []string {
+func MakeMolproIn(names []string, coords []float64) []string {
 	body := make([]string, 0)
-	for i, _ := range geom.Names {
+	for i, _ := range names {
 		tmp := make([]string, 0)
-		tmp = append(tmp, geom.Names[i])
-		for _, c := range geom.Coords[3*i : 3*i+3] {
+		tmp = append(tmp, names[i])
+		for _, c := range coords[3*i : 3*i+3] {
 			s := strconv.FormatFloat(c, 'f', 10, 64)
 			tmp = append(tmp, s)
 		}
@@ -101,8 +112,8 @@ func MakeMolproIn(geom *Geometry) []string {
 	return MakeInput(MakeMolproHead, MakeMolproFoot, body)
 }
 
-func WriteMolproIn(filename string, geom *Geometry) {
-	lines := MakeMolproIn(geom)
+func WriteMolproIn(filename string, names []string, coords []float64) {
+	lines := MakeMolproIn(names, coords)
 	writelines := strings.Join(lines, "\n")
 	err := ioutil.WriteFile(filename, []byte(writelines), 0755)
 	if err != nil {
@@ -137,7 +148,7 @@ func Basename(filename string) string {
 
 func Qsubmit(filename string) int {
 	pbsname := filename + ".pbs"
-	cmd := exec.Command("qsub",  pbsname)
+	cmd := exec.Command("qsub", pbsname)
 	out, err := cmd.Output()
 	if err != nil {
 		panic(err)
@@ -175,7 +186,7 @@ func MakePBSFoot() []string {
 func MakePBS(filename string) []string {
 	body := []string{"molpro -t 1 " + filename}
 	return MakeInput(MakePBSHead, MakePBSFoot, body)
-}	
+}
 
 func WritePBS(pbsfile, molprofile string) {
 	lines := MakePBS(molprofile)
@@ -184,4 +195,27 @@ func WritePBS(pbsfile, molprofile string) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func Make2D(i, j int) string {
+	if i == j {
+		return fmt.Sprintf("E(+%d+%d) - 2*E(0) + E(-%d-%d) / (2d)^2",
+			i, i, i, i)
+	} else {
+		return fmt.Sprintf("E(+%d+%d) - E(+%d-%d) - E(-%d+%d) + E(-%d-%d) / (2d)^2",
+			i, j, i, j, i, j, i, j)
+	}
+
+}
+
+func Derivative(dims ...int) string {
+	switch len(dims) {
+	case 2:
+		return Make2D(dims[0], dims[1])
+	}
+	return ""
+}
+
+type Job struct {
+	Name string
 }

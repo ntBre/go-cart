@@ -4,17 +4,18 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"math"
 )
 
-var testgeom = Geometry{[]string{"H", "O", "H"},
-	[]float64{0.0000000000, 0.7574590974, 0.5217905143,
-		0.0000000000, 0.0000000000, -0.0657441568,
-		0.0000000000, -0.7574590974, 0.5217905143}}
+var testnames = []string{"H", "O", "H"}
+var testcoords = []float64{0.0000000000, 0.7574590974, 0.5217905143,
+	0.0000000000, 0.0000000000, -0.0657441568,
+	0.0000000000, -0.7574590974, 0.5217905143}
 
 func TestReadInputXYZ(t *testing.T) {
-	want := testgeom
-	got := ReadInputXYZ("testfiles/geom.xyz")
-	if !reflect.DeepEqual(got, want) {
+	want, want2 := testnames, testcoords
+	got, got2 := ReadInputXYZ("testfiles/geom.xyz")
+	if !reflect.DeepEqual(got, want) && !reflect.DeepEqual(got2, want2) {
 		t.Errorf("got %v, wanted %v\n", got, want)
 	}
 }
@@ -35,7 +36,7 @@ func TestMakeMolproIn(t *testing.T) {
 		"set,spin",
 		"hf",
 		"{CCSD(T)-F12}"}
-	got := MakeMolproIn(&testgeom)
+	got := MakeMolproIn(testnames, testcoords)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %#v\nwanted %#v\n", got, want)
 	}
@@ -44,7 +45,7 @@ func TestMakeMolproIn(t *testing.T) {
 func TestWriteMolproIn(t *testing.T) {
 	// this is a terrible test after it has been run once successfully
 	filename := "testfiles/molpro.in"
-	WriteMolproIn(filename, &testgeom)
+	WriteMolproIn(filename, testnames, testcoords)
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		t.Errorf("%s does not exist", filename)
 	}
@@ -130,4 +131,71 @@ func TestQsubmit(t *testing.T) {
 	if got != want {
 		t.Errorf("got %d, wanted %d", got, want)
 	}
+}
+
+func TestDerivative(t *testing.T) {
+	t.Run("Diagonal second derivative", func(t *testing.T) {
+		got := Derivative(1, 1)
+		want := "E(+1+1) - 2*E(0) + E(-1-1) / (2d)^2"
+		if got != want {
+			t.Errorf("got %s, wanted %s", got, want)
+		}
+	})
+	t.Run("Off-diagonal second derivative", func(t *testing.T) {
+		got := Derivative(1, 2)
+		want := "E(+1+2) - E(+1-2) - E(-1+2) + E(-1-2) / (2d)^2"
+		if got != want {
+			t.Errorf("got %s, wanted %s", got, want)
+		}
+	})
+}
+
+func TestStep(t *testing.T) {
+	approxeq := func(a, b []float64) (eq bool) {
+		eps := 1e-6
+		eq = true
+		for i, _ := range a {
+			if math.Abs(a[i]-b[i]) > eps {
+				eq = false
+				return
+			}
+		}
+		return
+	}
+	t.Run("Positive two steps", func(t *testing.T) {
+		got := Step(testnames, testcoords, 1, 1)
+		want := []float64{1.0000000000, 0.7574590974, 0.5217905143,
+			0.0000000000, 0.0000000000, -0.0657441568,
+			0.0000000000, -0.7574590974, 0.5217905143}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("got %#v, wanted %#v", got, want)
+		}
+	})
+	t.Run("Negative two steps", func(t *testing.T) {
+		got := Step(testnames, testcoords, -1, -1)
+		want := []float64{-1.0000000000, 0.7574590974, 0.5217905143,
+			0.0000000000, 0.0000000000, -0.0657441568,
+			0.0000000000, -0.7574590974, 0.5217905143}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("got %#v, wanted %#v", got, want)
+		}
+	})
+	t.Run("Plus-minus two step", func(t *testing.T) {
+		got := Step(testnames, testcoords, +1, -2)
+		want := []float64{0.5000000000, 0.2574590974, 0.5217905143,
+			0.0000000000, 0.0000000000, -0.0657441568,
+			0.0000000000, -0.7574590974, 0.5217905143}
+		if !approxeq(got, want) {
+			t.Errorf("got %#v, wanted %#v", got, want)
+		}
+	})
+	t.Run("Minus-plus two step", func(t *testing.T) {
+		got := Step(testnames, testcoords, -1, 2)
+		want := []float64{-0.5000000000, 1.2574590974, 0.5217905143,
+			0.0000000000, 0.0000000000, -0.0657441568,
+			0.0000000000, -0.7574590974, 0.5217905143}
+		if !approxeq(got, want) {
+			t.Errorf("got %#v, wanted %#v", got, want)
+		}
+	})
 }

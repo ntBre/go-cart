@@ -2,3 +2,15 @@
   - to allow the same functions on different queues with different head/foot
     
 * Should do something similar for writing molpro input
+  
+* Implement permutations and updating coords
+  - try for something generic this time
+
+* Queuing 
+
+  
+* Math
+
+Want 2nd through 4th degree finite differences for the equation
+f(x1, x2, x3, x4, x5, x6, x7, x8, x9)
+in the case of water.
