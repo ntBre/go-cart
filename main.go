@@ -18,6 +18,7 @@ import (
 const (
 	energyLine  = "energy="
 	brokenFloat = 999.999
+	angborh     = 0.529177249
 )
 
 var (
@@ -250,7 +251,6 @@ func BuildJobList(names []string, coords []float64) (joblist [][]Job) {
 
 func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup) {
 	defer wg.Done()
-	// time.Sleep(time.Millisecond * 100) // replace with while outfile not found
 	coords = Step(coords, job.Steps...)
 	molprofile := "inp/" + job.Name + ".inp"
 	pbsfile := "inp/" + job.Name + ".pbs"
@@ -261,24 +261,61 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 	energy, err := ReadMolproOut(outfile)
 	for err != nil {
 		time.Sleep(time.Second)
-		energy, err = ReadMolproOut("inp/" + job.Name + ".out")
+		energy, err = ReadMolproOut(outfile)
 		job.Retries++
 	}
 	job.Status = "done"
 	job.Result = energy
 }
 
+func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan float64) {
+	defer wg.Done()
+	molprofile := "inp/ref.inp"
+	pbsfile := "inp/ref.pbs"
+	outfile := "inp/ref.out"
+	WriteMolproIn(molprofile, names, coords)
+	WritePBS(pbsfile, molprofile)
+	Qsubmit(pbsfile)
+	energy, err := ReadMolproOut(outfile)
+	for err != nil {
+		time.Sleep(time.Second)
+		energy, err = ReadMolproOut(outfile)
+	}
+	c <- energy
+}
+
+func PrintFile15(fcs [][]float64) {
+	flat := make([]float64, 0)
+	for _, v := range fcs {
+		flat = append(flat, v...)
+	}
+	for i := 0; i < len(flat); i += 3 {
+		fmt.Printf("%20.10f%20.10f%20.10f\n", flat[i], flat[i+1], flat[i+2])
+	}
+
+}
+
 func main() {
 	names, coords := ReadInputXYZ("testfiles/geom.xyz")
-	jobGroups := BuildJobList(names, coords)
 	fcs := make([][]float64, len(coords))
 	var wg sync.WaitGroup
+
 	if _, err := os.Stat("inp/"); os.IsNotExist(err) {
 		os.Mkdir("inp", 0755)
 	} else {
 		os.RemoveAll("inp/")
 		os.Mkdir("inp", 0755)
 	}
+
+	c := make(chan float64)
+	wg.Add(1)
+	go RefEnergy(names, coords, &wg, c)
+	E0 := <-c
+	wg.Wait()
+	close(c)
+
+	jobGroups := BuildJobList(names, coords)
+
 	for i, _ := range jobGroups {
 		fcs[i/len(coords)] = make([]float64, len(coords))
 	}
@@ -287,6 +324,9 @@ func main() {
 			if jobGroup[j].Name != "E0" {
 				wg.Add(1)
 				go QueueAndWait(&jobGroup[j], names, coords, &wg)
+			} else {
+				jobGroup[j].Status = "done"
+				jobGroup[j].Result = E0
 			}
 		}
 		wg.Wait()
@@ -296,9 +336,8 @@ func main() {
 		}
 		x := jobGroup[0].Steps[0] - 1
 		y := jobGroup[0].Steps[1] - 1
-		fcs[x][y] = total
+		// hard coded second derivative scaling factor and denominator
+		fcs[x][y] = total * angborh * angborh / (4 * delta * delta)
 	}
-	for i, _ := range fcs {
-		fmt.Println(fcs[i])
-	}
+	PrintFile15(fcs)
 }
