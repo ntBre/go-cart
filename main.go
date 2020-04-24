@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -248,11 +249,21 @@ func BuildJobList(names []string, coords []float64) (joblist [][]Job) {
 	return
 }
 
-func QueueAndWait(job *Job, wg *sync.WaitGroup) {
+func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup) {
 	defer wg.Done()
 	// time.Sleep(time.Millisecond * 100) // replace with while outfile not found
+	coords = Step(coords, job.Steps...)
+	molprofile := "inp/" + job.Name + ".inp"
+	WriteMolproIn(molprofile, names, coords)
+	WritePBS("inp/"+job.Name+".pbs", molprofile)
+	energy, err := ReadMolproOut("inp/"+job.Name+".out")
+	for err != nil && job.Retries < 5 {
+		time.Sleep(time.Second)
+		energy, err = ReadMolproOut("inp/"+job.Name+".out")
+		job.Retries++
+	}
 	job.Status = "done"
-	job.Result = 1.0
+	job.Result = energy
 }
 
 func main() {
@@ -260,21 +271,29 @@ func main() {
 	jobGroups := BuildJobList(names, coords)
 	fcs := make([][]float64, len(coords))
 	var wg sync.WaitGroup
+	if _, err := os.Stat("inp/"); os.IsNotExist(err) {
+		os.Mkdir("inp", 0755)
+	} else {
+		os.RemoveAll("inp/")
+		os.Mkdir("inp", 0755)
+	}
 	for i, _ := range jobGroups {
 		fcs[i/len(coords)] = make([]float64, len(coords))
 	}
 	for _, jobGroup := range jobGroups {
 		for j, _ := range jobGroup {
-			wg.Add(1)
-			go QueueAndWait(&jobGroup[j], &wg)
+			if jobGroup[j].Name != "E0" {
+				wg.Add(1)
+				go QueueAndWait(&jobGroup[j], names, coords, &wg)
+			}
 		}
 		wg.Wait()
 		var total float64 = 0
 		for j, _ := range jobGroup {
 			total += jobGroup[j].Coeff * jobGroup[j].Result
 		}
-		x := jobGroup[0].Steps[0]-1
-		y := jobGroup[0].Steps[1]-1
+		x := jobGroup[0].Steps[0] - 1
+		y := jobGroup[0].Steps[1] - 1
 		fcs[x][y] = total
 	}
 	for i, _ := range fcs {

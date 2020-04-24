@@ -1,0 +1,14 @@
+memory,50,m
+nocompress
+geomtyp=xyz
+angstrom
+geometry={
+H -1.0000000000 0.7574590974 0.5217905143
+O 0.0000000000 0.0000000000 -0.0657441568
+H 0.0000000000 -0.7574590974 0.5217905143
+}
+basis=cc-pVTZ-F12
+set,charge=0
+set,spin
+hf
+{CCSD(T)-F12}
