@@ -23,7 +23,7 @@ const (
 var (
 	ErrEnergyNotFound = errors.New("Energy not found in Molpro output")
 	ErrFileNotFound   = errors.New("Molpro output file not found")
-	delta             = 0.5
+	delta             = 0.005
 )
 
 func ReadFile(filename string) []string {
@@ -136,8 +136,7 @@ func Basename(filename string) string {
 }
 
 func Qsubmit(filename string) int {
-	pbsname := filename + ".pbs"
-	cmd := exec.Command("qsub", pbsname)
+	cmd := exec.Command("qsub", filename)
 	out, err := cmd.Output()
 	if err != nil {
 		panic(err)
@@ -254,12 +253,15 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 	// time.Sleep(time.Millisecond * 100) // replace with while outfile not found
 	coords = Step(coords, job.Steps...)
 	molprofile := "inp/" + job.Name + ".inp"
+	pbsfile := "inp/" + job.Name + ".pbs"
+	outfile := "inp/" + job.Name + ".out"
 	WriteMolproIn(molprofile, names, coords)
-	WritePBS("inp/"+job.Name+".pbs", molprofile)
-	energy, err := ReadMolproOut("inp/"+job.Name+".out")
-	for err != nil && job.Retries < 5 {
+	WritePBS(pbsfile, molprofile)
+	Qsubmit(pbsfile)
+	energy, err := ReadMolproOut(outfile)
+	for err != nil {
 		time.Sleep(time.Second)
-		energy, err = ReadMolproOut("inp/"+job.Name+".out")
+		energy, err = ReadMolproOut("inp/" + job.Name + ".out")
 		job.Retries++
 	}
 	job.Status = "done"

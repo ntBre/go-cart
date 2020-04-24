@@ -128,7 +128,7 @@ func TestWritePBS(t *testing.T) {
 }
 
 func TestQsubmit(t *testing.T) {
-	filename := "testfiles/molpro.in"
+	filename := "testfiles/molpro.pbs"
 	got := Qsubmit(filename)
 	want := 775241
 	if got != want {
@@ -177,7 +177,7 @@ func TestStep(t *testing.T) {
 	}
 	t.Run("Positive two steps", func(t *testing.T) {
 		got := Step(testcoords, 1, 1)
-		want := []float64{1.0000000000, 0.7574590974, 0.5217905143,
+		want := []float64{2*delta, 0.7574590974, 0.5217905143,
 			0.0000000000, 0.0000000000, -0.0657441568,
 			0.0000000000, -0.7574590974, 0.5217905143}
 		if !reflect.DeepEqual(got, want) {
@@ -186,7 +186,7 @@ func TestStep(t *testing.T) {
 	})
 	t.Run("Negative two steps", func(t *testing.T) {
 		got := Step(testcoords, -1, -1)
-		want := []float64{-1.0000000000, 0.7574590974, 0.5217905143,
+		want := []float64{-2*delta, 0.7574590974, 0.5217905143,
 			0.0000000000, 0.0000000000, -0.0657441568,
 			0.0000000000, -0.7574590974, 0.5217905143}
 		if !reflect.DeepEqual(got, want) {
@@ -195,7 +195,7 @@ func TestStep(t *testing.T) {
 	})
 	t.Run("Plus-minus two step", func(t *testing.T) {
 		got := Step(testcoords, +1, -2)
-		want := []float64{0.5000000000, 0.2574590974, 0.5217905143,
+		want := []float64{delta, 0.7574590974-delta, 0.5217905143,
 			0.0000000000, 0.0000000000, -0.0657441568,
 			0.0000000000, -0.7574590974, 0.5217905143}
 		if !approxeq(got, want) {
@@ -204,7 +204,7 @@ func TestStep(t *testing.T) {
 	})
 	t.Run("Minus-plus two step", func(t *testing.T) {
 		got := Step(testcoords, -1, 2)
-		want := []float64{-0.5000000000, 1.2574590974, 0.5217905143,
+		want := []float64{-delta, 0.7574590974+delta, 0.5217905143,
 			0.0000000000, 0.0000000000, -0.0657441568,
 			0.0000000000, -0.7574590974, 0.5217905143}
 		if !approxeq(got, want) {
