@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"hash/maphash"
 	"io/ioutil"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
@@ -186,15 +188,15 @@ func WritePBS(pbsfile, molprofile string) {
 func Make2D(i, j int) []Job {
 	if i == j {
 		// E(+i+i) - 2*E(0) + E(-i-i) / (2d)^2
-		return []Job{Job{1, HashName(), []int{i, i}, "queued", 0},
-			Job{2, "E0", []int{0}, "done", 0},
-			Job{1, HashName(), []int{-i, -i}, "queued", 0}}
+		return []Job{Job{1, HashName(), []int{i, i}, "queued", 0, 0},
+			Job{-2, "E0", []int{0}, "queued", 0, 0},
+			Job{1, HashName(), []int{-i, -i}, "queued", 0, 0}}
 	} else {
 		// E(+i+j) - E(+i-j) - E(-i+j) + E(-i-j) / (2d)^2
-		return []Job{Job{1, HashName(), []int{i, j}, "queued", 0},
-			Job{1, HashName(), []int{i, -j}, "queued", 0},
-			Job{1, HashName(), []int{-i, j}, "queued", 0},
-			Job{1, HashName(), []int{-i, -j}, "queued", 0}}
+		return []Job{Job{1, HashName(), []int{i, j}, "queued", 0, 0},
+			Job{-1, HashName(), []int{i, -j}, "queued", 0, 0},
+			Job{-1, HashName(), []int{-i, j}, "queued", 0, 0},
+			Job{1, HashName(), []int{-i, -j}, "queued", 0, 0}}
 	}
 
 }
@@ -208,11 +210,12 @@ func Derivative(dims ...int) []Job {
 }
 
 type Job struct {
-	Coeff   int
+	Coeff   float64
 	Name    string
-	Steps   []int
+	Steps   []int // doubles as index in array
 	Status  string
 	Retries int
+	Result  float64
 }
 
 func Step(coords []float64, steps ...int) []float64 {
@@ -235,22 +238,46 @@ func HashName() string {
 	return "job" + strconv.FormatUint(h.Sum64(), 16)
 }
 
-// func main() {
-// 	// loop through every position in the 9x9 matrix of
-// 	// force constants
-// 	// let the derivative function handle how to call
-// 	// each version of the derivative with just the indices
-// 	// derivative should build a []Job for each derivative
-// 	// with the associated geometries
-// 	jobs := make([]Job, 0)
-// 	fcs := make([][]float64, 0) // append here on outer read loop
-// 	fcRow := make([]float64, 0) // read into here on inner loop
-// 	for i := 0; i < len(coords); i++ {
-// 		for j := 0; j <= i; j++ {
-// 			// maybe these are go routines -> channel?
-// 			jobs = append(jobs, Derivative(i, j))
-// 		}
-// 	}
-// 	// then have another loop for running the jobs/reading output
-// 	// ch <- ? reading from the channel
-// }
+func BuildJobList(names []string, coords []float64) (joblist [][]Job) {
+	for i := 1; i <= len(coords); i++ {
+		// should be j <= i, but just do all for now before taking into account symmetry
+		for j := 1; j <= len(coords); j++ {
+			joblist = append(joblist, Derivative(i, j))
+		}
+	}
+	return
+}
+
+func QueueAndWait(job *Job, wg *sync.WaitGroup) {
+	defer wg.Done()
+	// time.Sleep(time.Millisecond * 100) // replace with while outfile not found
+	job.Status = "done"
+	job.Result = 1.0
+}
+
+func main() {
+	names, coords := ReadInputXYZ("testfiles/geom.xyz")
+	jobGroups := BuildJobList(names, coords)
+	fcs := make([][]float64, len(coords))
+	var wg sync.WaitGroup
+	for i, _ := range jobGroups {
+		fcs[i/len(coords)] = make([]float64, len(coords))
+	}
+	for _, jobGroup := range jobGroups {
+		for j, _ := range jobGroup {
+			wg.Add(1)
+			go QueueAndWait(&jobGroup[j], &wg)
+		}
+		wg.Wait()
+		var total float64 = 0
+		for j, _ := range jobGroup {
+			total += jobGroup[j].Coeff * jobGroup[j].Result
+		}
+		x := jobGroup[0].Steps[0]-1
+		y := jobGroup[0].Steps[1]-1
+		fcs[x][y] = total
+	}
+	for i, _ := range fcs {
+		fmt.Println(fcs[i])
+	}
+}
