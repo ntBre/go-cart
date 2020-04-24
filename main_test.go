@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 	"math"
+	"fmt"
 )
 
 var testnames = []string{"H", "O", "H"}
@@ -135,17 +136,25 @@ func TestQsubmit(t *testing.T) {
 
 func TestDerivative(t *testing.T) {
 	t.Run("Diagonal second derivative", func(t *testing.T) {
-		got := Derivative(1, 1)
-		want := "E(+1+1) - 2*E(0) + E(-1-1) / (2d)^2"
-		if got != want {
-			t.Errorf("got %s, wanted %s", got, want)
+		got := Derivative(1, 1)[0]
+		want := Job{1, "untestedName", []int{1, 1}, "queued", 0}
+		if want.Coeff != got.Coeff ||
+			!reflect.DeepEqual(want.Steps, got.Steps) ||
+			want.Status != got.Status ||
+			want.Retries != got.Retries {
+			fmt.Println(want.Steps, got.Steps)
+			t.Errorf("got %#v, wanted %#v", got, want)
 		}
 	})
 	t.Run("Off-diagonal second derivative", func(t *testing.T) {
-		got := Derivative(1, 2)
-		want := "E(+1+2) - E(+1-2) - E(-1+2) + E(-1-2) / (2d)^2"
-		if got != want {
-			t.Errorf("got %s, wanted %s", got, want)
+		got := Derivative(1, 2)[0]
+		want := Job{1, "untestedName", []int{1, 2}, "queued", 0}
+		if want.Coeff != got.Coeff ||
+			!reflect.DeepEqual(want.Steps, got.Steps) ||
+			want.Status != got.Status ||
+			want.Retries != got.Retries {
+			fmt.Println(want.Steps, got.Steps)
+			t.Errorf("got %#v, wanted %#v", got, want)
 		}
 	})
 }
@@ -163,7 +172,7 @@ func TestStep(t *testing.T) {
 		return
 	}
 	t.Run("Positive two steps", func(t *testing.T) {
-		got := Step(testnames, testcoords, 1, 1)
+		got := Step(testcoords, 1, 1)
 		want := []float64{1.0000000000, 0.7574590974, 0.5217905143,
 			0.0000000000, 0.0000000000, -0.0657441568,
 			0.0000000000, -0.7574590974, 0.5217905143}
@@ -172,7 +181,7 @@ func TestStep(t *testing.T) {
 		}
 	})
 	t.Run("Negative two steps", func(t *testing.T) {
-		got := Step(testnames, testcoords, -1, -1)
+		got := Step(testcoords, -1, -1)
 		want := []float64{-1.0000000000, 0.7574590974, 0.5217905143,
 			0.0000000000, 0.0000000000, -0.0657441568,
 			0.0000000000, -0.7574590974, 0.5217905143}
@@ -181,7 +190,7 @@ func TestStep(t *testing.T) {
 		}
 	})
 	t.Run("Plus-minus two step", func(t *testing.T) {
-		got := Step(testnames, testcoords, +1, -2)
+		got := Step(testcoords, +1, -2)
 		want := []float64{0.5000000000, 0.2574590974, 0.5217905143,
 			0.0000000000, 0.0000000000, -0.0657441568,
 			0.0000000000, -0.7574590974, 0.5217905143}
@@ -190,7 +199,7 @@ func TestStep(t *testing.T) {
 		}
 	})
 	t.Run("Minus-plus two step", func(t *testing.T) {
-		got := Step(testnames, testcoords, -1, 2)
+		got := Step(testcoords, -1, 2)
 		want := []float64{-0.5000000000, 1.2574590974, 0.5217905143,
 			0.0000000000, 0.0000000000, -0.0657441568,
 			0.0000000000, -0.7574590974, 0.5217905143}
@@ -198,4 +207,11 @@ func TestStep(t *testing.T) {
 			t.Errorf("got %#v, wanted %#v", got, want)
 		}
 	})
+}
+
+func TestHashName(t *testing.T) {
+	got := HashName()
+	if got[:3] != "job" {
+		t.Errorf("got %s, wanted %s", got[:3], "job")
+	}
 }

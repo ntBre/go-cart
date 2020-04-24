@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"fmt"
+	"hash/maphash"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -22,20 +22,6 @@ var (
 	ErrFileNotFound   = errors.New("Molpro output file not found")
 	delta             = 0.5
 )
-
-func Step(atoms []string, coords []float64, steps ...int) []float64 {
-	var c = make([]float64, len(coords))
-	copy(c, coords)
-	for _, v := range steps {
-		if v < 0 {
-			v = -1 * v
-			c[v-1] = c[v-1] - delta
-		} else {
-			c[v-1] += delta
-		}
-	}
-	return c
-}
 
 func ReadFile(filename string) []string {
 	lines, err := ioutil.ReadFile(filename)
@@ -197,25 +183,74 @@ func WritePBS(pbsfile, molprofile string) {
 	}
 }
 
-func Make2D(i, j int) string {
+func Make2D(i, j int) []Job {
 	if i == j {
-		return fmt.Sprintf("E(+%d+%d) - 2*E(0) + E(-%d-%d) / (2d)^2",
-			i, i, i, i)
+		// E(+i+i) - 2*E(0) + E(-i-i) / (2d)^2
+		return []Job{Job{1, HashName(), []int{i, i}, "queued", 0},
+			Job{2, "E0", []int{0}, "done", 0},
+			Job{1, HashName(), []int{-i, -i}, "queued", 0}}
 	} else {
-		return fmt.Sprintf("E(+%d+%d) - E(+%d-%d) - E(-%d+%d) + E(-%d-%d) / (2d)^2",
-			i, j, i, j, i, j, i, j)
+		// E(+i+j) - E(+i-j) - E(-i+j) + E(-i-j) / (2d)^2
+		return []Job{Job{1, HashName(), []int{i, j}, "queued", 0},
+			Job{1, HashName(), []int{i, -j}, "queued", 0},
+			Job{1, HashName(), []int{-i, j}, "queued", 0},
+			Job{1, HashName(), []int{-i, -j}, "queued", 0}}
 	}
 
 }
 
-func Derivative(dims ...int) string {
+func Derivative(dims ...int) []Job {
 	switch len(dims) {
 	case 2:
 		return Make2D(dims[0], dims[1])
 	}
-	return ""
+	return []Job{Job{}}
 }
 
 type Job struct {
-	Name string
+	Coeff   int
+	Name    string
+	Steps   []int
+	Status  string
+	Retries int
 }
+
+func Step(coords []float64, steps ...int) []float64 {
+	var c = make([]float64, len(coords))
+	copy(c, coords)
+	for _, v := range steps {
+		if v < 0 {
+			v = -1 * v
+			c[v-1] = c[v-1] - delta
+		} else {
+			c[v-1] += delta
+		}
+	}
+	return c
+}
+
+func HashName() string {
+	var h maphash.Hash
+	h.SetSeed(maphash.MakeSeed())
+	return "job" + strconv.FormatUint(h.Sum64(), 16)
+}
+
+// func main() {
+// 	// loop through every position in the 9x9 matrix of
+// 	// force constants
+// 	// let the derivative function handle how to call
+// 	// each version of the derivative with just the indices
+// 	// derivative should build a []Job for each derivative
+// 	// with the associated geometries
+// 	jobs := make([]Job, 0)
+// 	fcs := make([][]float64, 0) // append here on outer read loop
+// 	fcRow := make([]float64, 0) // read into here on inner loop
+// 	for i := 0; i < len(coords); i++ {
+// 		for j := 0; j <= i; j++ {
+// 			// maybe these are go routines -> channel?
+// 			jobs = append(jobs, Derivative(i, j))
+// 		}
+// 	}
+// 	// then have another loop for running the jobs/reading output
+// 	// ch <- ? reading from the channel
+// }
