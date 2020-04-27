@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"path/filepath"
 )
 
 const (
@@ -123,6 +124,10 @@ func ReadMolproOut(filename string) (float64, error) {
 			if err != nil {
 				panic(err)
 			}
+			files, _ := filepath.Glob("inp/"+Basename(filename)+"*")
+			for _, f := range files {
+				os.Remove(f)
+			}
 			return f, nil
 		}
 	}
@@ -152,6 +157,7 @@ func MakePBSHead() []string {
 		"#PBS -N go-cart",
 		"#PBS -S /bin/bash",
 		"#PBS -j oe",
+		"#PBS -o /dev/null",
 		"#PBS -W umask=022",
 		"#PBS -l walltime=00:30:00",
 		"#PBS -l ncpus=1",
@@ -296,7 +302,11 @@ func PrintFile15(fcs [][]float64) {
 }
 
 func main() {
-	names, coords := ReadInputXYZ("testfiles/geom.xyz")
+	if len(os.Args) < 2 {
+		panic("Input geometry not found in command line args")
+	}
+	geomfile := os.Args[1]
+	names, coords := ReadInputXYZ(geomfile)
 	fcs := make([][]float64, len(coords))
 	var wg sync.WaitGroup
 
@@ -320,6 +330,8 @@ func main() {
 		fcs[i/len(coords)] = make([]float64, len(coords))
 	}
 	for _, jobGroup := range jobGroups {
+		// wgOuter.Add(1)
+		// go func() { }() <- wrap whole inner loop in this
 		for j, _ := range jobGroup {
 			if jobGroup[j].Name != "E0" {
 				wg.Add(1)

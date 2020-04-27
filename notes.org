@@ -1,16 +1,14 @@
-* Should implement the pbs file writing as an interface
-  - to allow the same functions on different queues with different head/foot
-    
-* Should do something similar for writing molpro input
+* Delete files after reading - post job processing error, deleting too fast I think
+  - doesnt seem to effect the values I want, so should be okay, just a lot of logs
+
+* +send queue output to dev/null, o and e flags in pbs script+
+  https://www.nas.nasa.gov/hecc/support/kb/commonly-used-qsub-command-options_175.html
+
+* nested go routines for submitting all the job groups at once, not just the jobs in a group
+  - start checking for resources
+
+* zero values below some threshold
+
+* figure out how higher order derivatives are written in output
   
-* Implement permutations and updating coords
-  - try for something generic this time
-
-* Queuing 
-
-  
-* Math
-
-Want 2nd through 4th degree finite differences for the equation
-f(x1, x2, x3, x4, x5, x6, x7, x8, x9)
-in the case of water.
+* current time is 11m 8s for 2nd derivatives of water
