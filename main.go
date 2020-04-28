@@ -261,7 +261,6 @@ func HashName() string {
 
 func BuildJobList(names []string, coords []float64) (joblist [][]Job) {
 	for i := 1; i <= len(coords); i++ {
-		// should be j <= i, but just do all for now before taking into account symmetry
 		for j := 1; j <= len(coords); j++ {
 			joblist = append(joblist, Derivative(i, j))
 		}
@@ -347,10 +346,7 @@ func main() {
 	ch := make(chan int, 2)
 	for i, jobGroup := range jobGroups {
 		var wg sync.WaitGroup
-		// trying locking threads when reading output
-		// channel method isnt running the last job - never ended with without passing wgOuter
-		// trying passing wgOuter
-		ch <- 1 // try moving this inside the closure
+		ch <- 1 
 		wgOuter.Add(1)
 		go func(wg sync.WaitGroup, wgOuter *sync.WaitGroup, i int, jobGroup []Job) {
 			for j, _ := range jobGroup {
@@ -373,8 +369,7 @@ func main() {
 			fcs[x][y] = total * angborh * angborh / (4 * delta * delta)
 			fmt.Fprintf(os.Stderr, "%d/%d jobs completed\n", i+1, len(jobGroups))
 			<-ch
-			wgOuter.Done() // move to bottom, scared of defer
-			// trying again with pointer since it still wasnt ending
+			wgOuter.Done()
 		}(wg, &wgOuter, i, jobGroup)
 	}
 	wgOuter.Wait()

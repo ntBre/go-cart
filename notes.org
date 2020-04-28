@@ -24,6 +24,8 @@
   
 * current time is 11m 8s for 2nd derivatives of water
 
+* 7m now with semaphore 2
+
 * Advice from irc
   <dominikh> anyway, NumGoroutine isn't really a useful metric for avoiding
   hitting the limit. I'd just have a semaphore (easiest implemented
@@ -31,3 +33,7 @@
   release when a goroutine returns, and hope things work out
 
 * Tried https://github.com/korovkin/limiter for limiting goroutines but it was not helpful
+
+* flatten job array to only hvae one layer of goroutines
+  - abs of steps -1 is already the index so just += that index position when a job finishes
+  - then divide the whole array by the appropriate nDelta)^2 combination right before printing
