@@ -324,6 +324,13 @@ func main() {
 	names, coords := ReadInputXYZ(geomfile)
 	fcs := make([][]float64, len(coords))
 
+	var concRoutines int
+	if len(os.Args) > 2 {
+		concRoutines, _ = strconv.Atoi(os.Args[2])
+	} else {
+		concRoutines = 5
+	}
+
 	if _, err := os.Stat("inp/"); os.IsNotExist(err) {
 		os.Mkdir("inp", 0755)
 	} else {
@@ -345,8 +352,7 @@ func main() {
 		fcs[i] = make([]float64, len(coords))
 	}
 
-	ch := make(chan int, 7) // rerun with steps on E0 to do sum
-	// also more goroutines = 7 instead of 1 which is serial
+	ch := make(chan int, concRoutines)
 	for j, _ := range jobGroup {
 		if jobGroup[j].Name != "E0" {
 			wg.Add(1)

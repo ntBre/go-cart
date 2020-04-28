@@ -8,6 +8,7 @@
   
 * Try sync/semaphore maybe https://github.com/golang/sync/blob/master/semaphore/semaphore_example_test.go
 
+* TODO Bump this one, actually ran into this today
 * TODO add case for files found but no energy in readoutput, like in sempirical
   - more difficult because there may be no clear error or MOPAC DONE to check against
 
@@ -25,6 +26,12 @@
 * current time is 11m 8s for 2nd derivatives of water
 
 * 7m now with semaphore 2
+
+* 8m with semaphore 5 on flattened version
+
+* 5.5m with semaphore 8 on flat
+
+* 4m22s with s10 on flat, pushing to master
 
 * Advice from irc
   <dominikh> anyway, NumGoroutine isn't really a useful metric for avoiding
