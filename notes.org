@@ -5,6 +5,8 @@
   https://www.nas.nasa.gov/hecc/support/kb/commonly-used-qsub-command-options_175.html
   
 * DONE catch resource unavailable error from submit too, wait and resubmit
+  
+* Try sync/semaphore maybe https://github.com/golang/sync/blob/master/semaphore/semaphore_example_test.go
 
 * TODO add case for files found but no energy in readoutput, like in sempirical
   - more difficult because there may be no clear error or MOPAC DONE to check against

@@ -8,8 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -113,7 +113,9 @@ func WriteMolproIn(filename string, names []string, coords []float64) {
 }
 
 func ReadMolproOut(filename string) (float64, error) {
+	runtime.LockOSThread()
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		runtime.UnlockOSThread()
 		return brokenFloat, ErrFileNotFound
 	}
 	lines := ReadFile(filename)
@@ -124,13 +126,16 @@ func ReadMolproOut(filename string) (float64, error) {
 			if err != nil {
 				panic(err)
 			}
-			files, _ := filepath.Glob("inp/" + Basename(filename) + "*")
-			for _, f := range files {
-				os.Remove(f)
-			}
+			// dont delete, too many syscalls
+			// files, _ := filepath.Glob("inp/" + Basename(filename) + "*")
+			// for _, f := range files {
+			// 	os.Remove(f)
+			// }
+			runtime.UnlockOSThread()
 			return f, nil
 		}
 	}
+	runtime.UnlockOSThread()
 	return brokenFloat, ErrEnergyNotFound
 }
 
@@ -141,22 +146,24 @@ func Basename(filename string) string {
 	return basename
 }
 
-func Qsubmit(filename string) int {
-	cmd := exec.Command("qsub", filename)
-	out, err := cmd.Output()
+func Qsubmit(filename string) {
+
+	runtime.LockOSThread()
+	_, err := exec.Command("qsub", filename).Output()
+	runtime.UnlockOSThread()
 	retries := 0
 	for err != nil {
 		if retries < 5 {
-			time.Sleep(500 * time.Millisecond)
-			err = cmd.Run()
+			runtime.LockOSThread()
+			time.Sleep(time.Second)
+			_, err = exec.Command("qsub", filename).Output()
+			runtime.UnlockOSThread()
+			fmt.Println(err)
 			retries++
 		} else {
 			panic(fmt.Sprintf("Qsubmit failed after %d retries", retries))
 		}
 	}
-	b := Basename(string(out))
-	i, _ := strconv.Atoi(b)
-	return i
 }
 
 func MakePBSHead() []string {
@@ -323,7 +330,7 @@ func main() {
 		os.Mkdir("inp", 0755)
 	}
 
-	var wg sync.WaitGroup
+	var wg, wgOuter sync.WaitGroup
 	c := make(chan float64)
 	wg.Add(1)
 	go RefEnergy(names, coords, &wg, c)
@@ -337,26 +344,39 @@ func main() {
 		fcs[i/len(coords)] = make([]float64, len(coords))
 	}
 
+	ch := make(chan int, 2)
 	for i, jobGroup := range jobGroups {
-		for j, _ := range jobGroup {
-			if jobGroup[j].Name != "E0" {
-				wg.Add(1)
-				go QueueAndWait(&jobGroup[j], names, coords, &wg)
-			} else {
-				jobGroup[j].Status = "done"
-				jobGroup[j].Result = E0
+		var wg sync.WaitGroup
+		// trying locking threads when reading output
+		// channel method isnt running the last job - never ended with without passing wgOuter
+		// trying passing wgOuter
+		ch <- 1 // try moving this inside the closure
+		wgOuter.Add(1)
+		go func(wg sync.WaitGroup, wgOuter *sync.WaitGroup, i int, jobGroup []Job) {
+			for j, _ := range jobGroup {
+				if jobGroup[j].Name != "E0" {
+					wg.Add(1)
+					go QueueAndWait(&jobGroup[j], names, coords, &wg)
+				} else {
+					jobGroup[j].Status = "done"
+					jobGroup[j].Result = E0
+				}
 			}
-		}
-		wg.Wait()
-		var total float64 = 0
-		for j, _ := range jobGroup {
-			total += jobGroup[j].Coeff * jobGroup[j].Result
-		}
-		x := jobGroup[0].Steps[0] - 1
-		y := jobGroup[0].Steps[1] - 1
-		// hard coded second derivative scaling factor and denominator
-		fcs[x][y] = total * angborh * angborh / (4 * delta * delta)
-		fmt.Fprintf(os.Stderr, "%d/%d jobs completed\n", i+1, len(jobGroups))
+			wg.Wait()
+			var total float64 = 0
+			for j, _ := range jobGroup {
+				total += jobGroup[j].Coeff * jobGroup[j].Result
+			}
+			x := jobGroup[0].Steps[0] - 1
+			y := jobGroup[0].Steps[1] - 1
+			// hard coded second derivative scaling factor and denominator
+			fcs[x][y] = total * angborh * angborh / (4 * delta * delta)
+			fmt.Fprintf(os.Stderr, "%d/%d jobs completed\n", i+1, len(jobGroups))
+			<-ch
+			wgOuter.Done() // move to bottom, scared of defer
+			// trying again with pointer since it still wasnt ending
+		}(wg, &wgOuter, i, jobGroup)
 	}
+	wgOuter.Wait()
 	PrintFile15(fcs)
 }
