@@ -8,12 +8,12 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"path/filepath"
 )
 
 const (
@@ -124,7 +124,7 @@ func ReadMolproOut(filename string) (float64, error) {
 			if err != nil {
 				panic(err)
 			}
-			files, _ := filepath.Glob("inp/"+Basename(filename)+"*")
+			files, _ := filepath.Glob("inp/" + Basename(filename) + "*")
 			for _, f := range files {
 				os.Remove(f)
 			}
@@ -329,9 +329,8 @@ func main() {
 	for i, _ := range jobGroups {
 		fcs[i/len(coords)] = make([]float64, len(coords))
 	}
-	for _, jobGroup := range jobGroups {
-		// wgOuter.Add(1)
-		// go func() { }() <- wrap whole inner loop in this
+
+	for i, jobGroup := range jobGroups {
 		for j, _ := range jobGroup {
 			if jobGroup[j].Name != "E0" {
 				wg.Add(1)
@@ -350,6 +349,7 @@ func main() {
 		y := jobGroup[0].Steps[1] - 1
 		// hard coded second derivative scaling factor and denominator
 		fcs[x][y] = total * angborh * angborh / (4 * delta * delta)
+		fmt.Fprintf(os.Stderr, "%d/%d jobs completed\n", i+1, len(jobGroups))
 	}
 	PrintFile15(fcs)
 }

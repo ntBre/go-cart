@@ -1,13 +1,20 @@
-* Delete files after reading - post job processing error, deleting too fast I think
+* +Delete files after reading - post job processing error, deleting too fast I think+
   - doesnt seem to effect the values I want, so should be okay, just a lot of logs
 
 * +send queue output to dev/null, o and e flags in pbs script+
   https://www.nas.nasa.gov/hecc/support/kb/commonly-used-qsub-command-options_175.html
 
-* nested go routines for submitting all the job groups at once, not just the jobs in a group
-  - start checking for resources
+* TODO add case for files found but no energy in readoutput, like in sempirical
+  - more difficult because there may be no clear error or MOPAC DONE to check against
 
-* zero values below some threshold
+* TODO nested go routines for submitting all the job groups at once, not just the jobs in a group
+  - start checking for resources
+  - spent all day trying to figure out, might need different approach
+    
+* tried setting sleep in queueandsubmit to 100 ms and something broke
+  - not sure if caused by that but that is the first crash ive seen 
+
+* zero values below some threshold - hold off for now, see later
 
 * figure out how higher order derivatives are written in output
   
