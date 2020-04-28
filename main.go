@@ -210,7 +210,7 @@ func Make2D(i, j int) []Job {
 	if i == j {
 		// E(+i+i) - 2*E(0) + E(-i-i) / (2d)^2
 		return []Job{Job{1, HashName(), []int{i, i}, "queued", 0, 0},
-			Job{-2, "E0", []int{0}, "queued", 0, 0},
+			Job{-2, "E0", []int{i, i}, "queued", 0, 0},
 			Job{1, HashName(), []int{-i, -i}, "queued", 0, 0}}
 	} else {
 		// E(+i+j) - E(+i-j) - E(-i+j) + E(-i-j) / (2d)^2
@@ -259,16 +259,17 @@ func HashName() string {
 	return "job" + strconv.FormatUint(h.Sum64(), 16)
 }
 
-func BuildJobList(names []string, coords []float64) (joblist [][]Job) {
+func BuildJobList(names []string, coords []float64) (joblist []Job) {
 	for i := 1; i <= len(coords); i++ {
 		for j := 1; j <= len(coords); j++ {
-			joblist = append(joblist, Derivative(i, j))
+			joblist = append(joblist, Derivative(i, j)...)
 		}
 	}
 	return
 }
 
-func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup) {
+func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup,
+	ch chan int) {
 	defer wg.Done()
 	coords = Step(coords, job.Steps...)
 	molprofile := "inp/" + job.Name + ".inp"
@@ -285,6 +286,7 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 	}
 	job.Status = "done"
 	job.Result = energy
+	<-ch
 }
 
 func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan float64) {
@@ -329,7 +331,7 @@ func main() {
 		os.Mkdir("inp", 0755)
 	}
 
-	var wg, wgOuter sync.WaitGroup
+	var wg sync.WaitGroup
 	c := make(chan float64)
 	wg.Add(1)
 	go RefEnergy(names, coords, &wg, c)
@@ -337,41 +339,44 @@ func main() {
 	wg.Wait()
 	close(c)
 
-	jobGroups := BuildJobList(names, coords)
+	jobGroup := BuildJobList(names, coords)
 
-	for i, _ := range jobGroups {
-		fcs[i/len(coords)] = make([]float64, len(coords))
+	for i := 0; i < len(coords); i++ {
+		fcs[i] = make([]float64, len(coords))
 	}
 
-	ch := make(chan int, 2)
-	for i, jobGroup := range jobGroups {
-		var wg sync.WaitGroup
-		ch <- 1 
-		wgOuter.Add(1)
-		go func(wg sync.WaitGroup, wgOuter *sync.WaitGroup, i int, jobGroup []Job) {
-			for j, _ := range jobGroup {
-				if jobGroup[j].Name != "E0" {
-					wg.Add(1)
-					go QueueAndWait(&jobGroup[j], names, coords, &wg)
-				} else {
-					jobGroup[j].Status = "done"
-					jobGroup[j].Result = E0
-				}
-			}
-			wg.Wait()
-			var total float64 = 0
-			for j, _ := range jobGroup {
-				total += jobGroup[j].Coeff * jobGroup[j].Result
-			}
-			x := jobGroup[0].Steps[0] - 1
-			y := jobGroup[0].Steps[1] - 1
-			// hard coded second derivative scaling factor and denominator
-			fcs[x][y] = total * angborh * angborh / (4 * delta * delta)
-			fmt.Fprintf(os.Stderr, "%d/%d jobs completed\n", i+1, len(jobGroups))
-			<-ch
-			wgOuter.Done()
-		}(wg, &wgOuter, i, jobGroup)
+	ch := make(chan int, 7) // rerun with steps on E0 to do sum
+	// also more goroutines = 7 instead of 1 which is serial
+	for j, _ := range jobGroup {
+		if jobGroup[j].Name != "E0" {
+			wg.Add(1)
+			ch <- 1
+			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch)
+		} else {
+			jobGroup[j].Status = "done"
+			jobGroup[j].Result = E0
+		}
 	}
-	wgOuter.Wait()
+	wg.Wait()
+	for j, _ := range jobGroup {
+		x := jobGroup[j].Steps[0]
+		y := jobGroup[j].Steps[1]
+		if x < 0 {
+			x = -1 * x
+		}
+		if y < 0 {
+			y = -1 * y
+		}
+		x-- // decrement after sign transform
+		y--
+		fcs[x][y] += jobGroup[j].Coeff * jobGroup[j].Result
+	}
+	// hard coded second derivative scaling factor and denominator
+	for x, _ := range fcs {
+		for y, _ := range fcs[x] {
+			fcs[x][y] = fcs[x][y] * angborh * angborh / (4 * delta * delta)
+		}
+	}
+	// fmt.Fprintf(os.Stderr, "%d/%d jobs completed\n", i+1, len(jobGroups))
 	PrintFile15(fcs)
 }

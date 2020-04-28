@@ -2,6 +2,7 @@
 #PBS -N go-cart
 #PBS -S /bin/bash
 #PBS -j oe
+#PBS -o /dev/null
 #PBS -W umask=022
 #PBS -l walltime=00:30:00
 #PBS -l ncpus=1
