@@ -144,8 +144,15 @@ func Basename(filename string) string {
 func Qsubmit(filename string) int {
 	cmd := exec.Command("qsub", filename)
 	out, err := cmd.Output()
-	if err != nil {
-		panic(err)
+	retries := 0
+	for err != nil {
+		if retries < 5 {
+			time.Sleep(500 * time.Millisecond)
+			err = cmd.Run()
+			retries++
+		} else {
+			panic(fmt.Sprintf("Qsubmit failed after %d retries", retries))
+		}
 	}
 	b := Basename(string(out))
 	i, _ := strconv.Atoi(b)
@@ -308,7 +315,6 @@ func main() {
 	geomfile := os.Args[1]
 	names, coords := ReadInputXYZ(geomfile)
 	fcs := make([][]float64, len(coords))
-	var wg sync.WaitGroup
 
 	if _, err := os.Stat("inp/"); os.IsNotExist(err) {
 		os.Mkdir("inp", 0755)
@@ -317,6 +323,7 @@ func main() {
 		os.Mkdir("inp", 0755)
 	}
 
+	var wg sync.WaitGroup
 	c := make(chan float64)
 	wg.Add(1)
 	go RefEnergy(names, coords, &wg, c)

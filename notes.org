@@ -3,6 +3,8 @@
 
 * +send queue output to dev/null, o and e flags in pbs script+
   https://www.nas.nasa.gov/hecc/support/kb/commonly-used-qsub-command-options_175.html
+  
+* DONE catch resource unavailable error from submit too, wait and resubmit
 
 * TODO add case for files found but no energy in readoutput, like in sempirical
   - more difficult because there may be no clear error or MOPAC DONE to check against
@@ -19,3 +21,11 @@
 * figure out how higher order derivatives are written in output
   
 * current time is 11m 8s for 2nd derivatives of water
+
+* Advice from irc
+  <dominikh> anyway, NumGoroutine isn't really a useful metric for avoiding
+  hitting the limit. I'd just have a semaphore (easiest implemented
+  as a buffered channel). acquire before spawning a goroutine,
+  release when a goroutine returns, and hope things work out
+
+* Tried https://github.com/korovkin/limiter for limiting goroutines but it was not helpful
