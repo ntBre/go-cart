@@ -7,12 +7,14 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -20,6 +22,8 @@ const (
 	energyLine  = "energy="
 	brokenFloat = 999.999
 	angborh     = 0.529177249
+	maxRetries  = 5
+	progName    = "go-cart"
 )
 
 var (
@@ -81,11 +85,11 @@ func MakeMolproFoot() []string {
 		"{CCSD(T)-F12}"}
 }
 
-func MakeInput(head, foot func() []string, body []string) []string {
+func MakeInput(head, foot, body []string) []string {
 	file := make([]string, 0)
-	file = append(file, head()...)
+	file = append(file, head...)
 	file = append(file, body...)
-	file = append(file, foot()...)
+	file = append(file, foot...)
 	return file
 }
 
@@ -100,7 +104,7 @@ func MakeMolproIn(names []string, coords []float64) []string {
 		}
 		body = append(body, strings.Join(tmp, " "))
 	}
-	return MakeInput(MakeMolproHead, MakeMolproFoot, body)
+	return MakeInput(MakeMolproHead(), MakeMolproFoot(), body)
 }
 
 func WriteMolproIn(filename string, names []string, coords []float64) {
@@ -146,17 +150,17 @@ func Basename(filename string) string {
 	return basename
 }
 
-func Qsubmit(filename string) {
+func Qsubmit(filename string) int {
 
 	runtime.LockOSThread()
-	_, err := exec.Command("qsub", filename).Output()
+	out, err := exec.Command("qsub", filename).Output()
 	runtime.UnlockOSThread()
 	retries := 0
 	for err != nil {
-		if retries < 5 {
+		if retries < maxRetries {
 			runtime.LockOSThread()
 			time.Sleep(time.Second)
-			_, err = exec.Command("qsub", filename).Output()
+			out, err = exec.Command("qsub", filename).Output()
 			runtime.UnlockOSThread()
 			fmt.Println(err)
 			retries++
@@ -164,6 +168,9 @@ func Qsubmit(filename string) {
 			panic(fmt.Sprintf("Qsubmit failed after %d retries", retries))
 		}
 	}
+	b := Basename(string(out))
+	i, _ := strconv.Atoi(b)
+	return i
 }
 
 func MakePBSHead() []string {
@@ -171,7 +178,7 @@ func MakePBSHead() []string {
 		"#PBS -N go-cart",
 		"#PBS -S /bin/bash",
 		"#PBS -j oe",
-		"#PBS -o /dev/null",
+		// "#PBS -o /dev/null",
 		"#PBS -W umask=022",
 		"#PBS -l walltime=00:30:00",
 		"#PBS -l ncpus=1",
@@ -187,18 +194,20 @@ func MakePBSHead() []string {
 		"date"}
 }
 
-func MakePBSFoot() []string {
-	return []string{"date",
+func MakePBSFoot(count int) []string {
+	num := strconv.Itoa(count)
+	return []string{"echo signaling " + num,
+		"ssh -t maple pkill -" + num + " " + progName,
 		"rm -rf $TMPDIR"}
 }
 
-func MakePBS(filename string) []string {
+func MakePBS(filename string, count int) []string {
 	body := []string{"molpro -t 1 " + filename}
-	return MakeInput(MakePBSHead, MakePBSFoot, body)
+	return MakeInput(MakePBSHead(), MakePBSFoot(count), body)
 }
 
-func WritePBS(pbsfile, molprofile string) {
-	lines := MakePBS(molprofile)
+func WritePBS(pbsfile, molprofile string, count int) {
+	lines := MakePBS(molprofile, count)
 	writelines := strings.Join(lines, "\n")
 	err := ioutil.WriteFile(pbsfile, []byte(writelines), 0755)
 	if err != nil {
@@ -209,15 +218,15 @@ func WritePBS(pbsfile, molprofile string) {
 func Make2D(i, j int) []Job {
 	if i == j {
 		// E(+i+i) - 2*E(0) + E(-i-i) / (2d)^2
-		return []Job{Job{1, HashName(), []int{i, i}, "queued", 0, 0},
-			Job{-2, "E0", []int{i, i}, "queued", 0, 0},
-			Job{1, HashName(), []int{-i, -i}, "queued", 0, 0}}
+		return []Job{Job{1, HashName(), 0, 0, []int{i, i}, "queued", 0, 0},
+			Job{-2, "E0", 0, 0, []int{i, i}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i}, "queued", 0, 0}}
 	} else {
 		// E(+i+j) - E(+i-j) - E(-i+j) + E(-i-j) / (2d)^2
-		return []Job{Job{1, HashName(), []int{i, j}, "queued", 0, 0},
-			Job{-1, HashName(), []int{i, -j}, "queued", 0, 0},
-			Job{-1, HashName(), []int{-i, j}, "queued", 0, 0},
-			Job{1, HashName(), []int{-i, -j}, "queued", 0, 0}}
+		return []Job{Job{1, HashName(), 0, 0, []int{i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, -j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -j}, "queued", 0, 0}}
 	}
 
 }
@@ -233,6 +242,8 @@ func Derivative(dims ...int) []Job {
 type Job struct {
 	Coeff   float64
 	Name    string
+	Number  int
+	Count   int
 	Steps   []int // doubles as index in array
 	Status  string
 	Retries int
@@ -268,21 +279,45 @@ func BuildJobList(names []string, coords []float64) (joblist []Job) {
 	return
 }
 
-func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup,
-	ch chan int) {
+func Qstat(jobnum string) string {
+	qstatus, _ := exec.Command("qstat", jobnum).Output()
+	qlines := strings.Split(string(qstatus), "\n")
+	if len(qlines) == 4 {
+		return SplitLine(qlines[2])[4]
+	}
+	return "done"
+}
+
+func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup, ch chan int) {
 	defer wg.Done()
 	coords = Step(coords, job.Steps...)
 	molprofile := "inp/" + job.Name + ".inp"
 	pbsfile := "inp/" + job.Name + ".pbs"
 	outfile := "inp/" + job.Name + ".out"
 	WriteMolproIn(molprofile, names, coords)
-	WritePBS(pbsfile, molprofile)
-	Qsubmit(pbsfile)
+	WritePBS(pbsfile, molprofile, job.Count)
+	job.Number = Qsubmit(pbsfile)
+	// this is the place to check for queue status if energy not found
+	// failing when file exists but not written to
+	// if file exists and there's no energy=/pattern match AND not in queue, resubmit
+	// jobnum := strconv.Itoa(job.Number)
 	energy, err := ReadMolproOut(outfile)
-	for err != nil {
-		time.Sleep(time.Second)
-		energy, err = ReadMolproOut(outfile)
-		job.Retries++
+	sigChan := make(chan os.Signal, 1)
+	sigWant := os.Signal(syscall.Signal(job.Count))
+	signal.Notify(sigChan, sigWant)
+	fmt.Println("want signal", sigWant)
+	s := <-sigChan
+	fmt.Println("Got signal", s)
+	energy, err = ReadMolproOut(outfile)
+	job.Retries++
+	if job.Retries > 10 {
+		fmt.Fprintf(os.Stderr, "having problems with %s\n", outfile)
+		job.Number = Qsubmit(pbsfile)
+		// jobnum = strconv.Itoa(job.Number)
+		job.Retries = 0
+	}
+	if err != nil {
+		panic(err)
 	}
 	job.Status = "done"
 	job.Result = energy
@@ -295,7 +330,7 @@ func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan floa
 	pbsfile := "inp/ref.pbs"
 	outfile := "inp/ref.out"
 	WriteMolproIn(molprofile, names, coords)
-	WritePBS(pbsfile, molprofile)
+	WritePBS(pbsfile, molprofile, 35)
 	Qsubmit(pbsfile)
 	energy, err := ReadMolproOut(outfile)
 	for err != nil {
@@ -316,13 +351,20 @@ func PrintFile15(fcs [][]float64) {
 
 }
 
+func IntAbs(n int) int {
+	if n < 0 {
+		return -1 * n
+	}
+	return n
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		panic("Input geometry not found in command line args")
 	}
 	geomfile := os.Args[1]
 	names, coords := ReadInputXYZ(geomfile)
-	fcs := make([][]float64, len(coords))
+	ncoords := len(coords)
 
 	var concRoutines int
 	if len(os.Args) > 2 {
@@ -348,15 +390,35 @@ func main() {
 
 	jobGroup := BuildJobList(names, coords)
 
-	for i := 0; i < len(coords); i++ {
-		fcs[i] = make([]float64, len(coords))
+	fcs2 := make([][]float64, ncoords)
+	fcs3 := make([][][]float64, ncoords)
+	fcs4 := make([][][][]float64, ncoords)
+	for i := 0; i < ncoords; i++ {
+		fcs2[i] = make([]float64, ncoords)
+		fcs3[i] = make([][]float64, len(coords))
+		fcs4[i] = make([][][]float64, len(coords))
+		for j := 0; j < ncoords; j++ {
+			fcs3[i][j] = make([]float64, len(coords))
+			fcs4[i][j] = make([][]float64, len(coords))
+			for k := 0; k < ncoords; k++ {
+				fcs4[i][j][k] = make([]float64, len(coords))
+			}
+		}
 	}
 
 	ch := make(chan int, concRoutines)
+	count := 34 // SIGRTMIN
 	for j, _ := range jobGroup {
 		if jobGroup[j].Name != "E0" {
 			wg.Add(1)
 			ch <- 1
+			jobGroup[j].Count = count
+			if count == 64 {
+				count = 34
+			} else {
+				count++
+			}
+			fmt.Println(jobGroup[j].Count)
 			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch)
 		} else {
 			jobGroup[j].Status = "done"
@@ -365,24 +427,38 @@ func main() {
 	}
 	wg.Wait()
 	for j, _ := range jobGroup {
-		x := jobGroup[j].Steps[0]
-		y := jobGroup[j].Steps[1]
-		if x < 0 {
-			x = -1 * x
+		switch len(jobGroup[j].Steps) {
+		case 2:
+			x := jobGroup[j].Steps[0]
+			y := jobGroup[j].Steps[1]
+			x = IntAbs(x) - 1
+			y = IntAbs(y) - 1
+			fcs2[x][y] += jobGroup[j].Coeff * jobGroup[j].Result
+		case 3:
+			x := jobGroup[j].Steps[0]
+			y := jobGroup[j].Steps[1]
+			z := jobGroup[j].Steps[2]
+			x = IntAbs(x) - 1
+			y = IntAbs(y) - 1
+			z = IntAbs(z) - 1
+			fcs3[x][y][z] += jobGroup[j].Coeff * jobGroup[j].Result
+		case 4:
+			x := jobGroup[j].Steps[0]
+			y := jobGroup[j].Steps[1]
+			z := jobGroup[j].Steps[2]
+			w := jobGroup[j].Steps[3]
+			x = IntAbs(x) - 1
+			y = IntAbs(y) - 1
+			z = IntAbs(z) - 1
+			w = IntAbs(w) - 1
+			fcs4[x][y][z][w] += jobGroup[j].Coeff * jobGroup[j].Result
 		}
-		if y < 0 {
-			y = -1 * y
-		}
-		x-- // decrement after sign transform
-		y--
-		fcs[x][y] += jobGroup[j].Coeff * jobGroup[j].Result
 	}
 	// hard coded second derivative scaling factor and denominator
-	for x, _ := range fcs {
-		for y, _ := range fcs[x] {
-			fcs[x][y] = fcs[x][y] * angborh * angborh / (4 * delta * delta)
+	for i := 0; i < ncoords; i++ {
+		for j := 0; j < ncoords; j++ {
+			fcs2[i][j] = fcs2[i][j] * angborh * angborh / (4 * delta * delta)
 		}
 	}
-	// fmt.Fprintf(os.Stderr, "%d/%d jobs completed\n", i+1, len(jobGroups))
-	PrintFile15(fcs)
+	PrintFile15(fcs2)
 }

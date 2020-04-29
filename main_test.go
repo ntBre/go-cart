@@ -140,7 +140,7 @@ func TestWritePBS(t *testing.T) {
 func TestDerivative(t *testing.T) {
 	t.Run("Diagonal second derivative", func(t *testing.T) {
 		got := Derivative(1, 1)[0]
-		want := Job{1, "untestedName", []int{1, 1}, "queued", 0, 0}
+		want := Job{1, "untestedName", 0, []int{1, 1}, "queued", 0, 0}
 		if want.Coeff != got.Coeff ||
 			!reflect.DeepEqual(want.Steps, got.Steps) ||
 			want.Status != got.Status ||
@@ -152,7 +152,7 @@ func TestDerivative(t *testing.T) {
 	})
 	t.Run("Off-diagonal second derivative", func(t *testing.T) {
 		got := Derivative(1, 2)[0]
-		want := Job{1, "untestedName", []int{1, 2}, "queued", 0, 0}
+		want := Job{1, "untestedName", 0, []int{1, 2}, "queued", 0, 0}
 		if want.Coeff != got.Coeff ||
 			!reflect.DeepEqual(want.Steps, got.Steps) ||
 			want.Status != got.Status ||
@@ -222,8 +222,8 @@ func TestHashName(t *testing.T) {
 }
 
 func TestBuildJobList(t *testing.T) {
-	fmt.Println(len(BuildJobList(minname, mincoord)))
-	fmt.Println(BuildJobList(minname, mincoord))
+	// fmt.Println(len(BuildJobList(minname, mincoord)))
+	// fmt.Println(BuildJobList(minname, mincoord))
 }
 
 // func TestPrintFile15(t *testing.T) {
