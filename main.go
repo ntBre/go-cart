@@ -24,6 +24,8 @@ const (
 	angborh     = 0.529177249
 	maxRetries  = 5
 	progName    = "go-cart"
+	RTMIN       = 35
+	RTMAX       = 64
 )
 
 var (
@@ -162,7 +164,6 @@ func Qsubmit(filename string) int {
 			time.Sleep(time.Second)
 			out, err = exec.Command("qsub", filename).Output()
 			runtime.UnlockOSThread()
-			fmt.Println(err)
 			retries++
 		} else {
 			panic(fmt.Sprintf("Qsubmit failed after %d retries", retries))
@@ -178,7 +179,7 @@ func MakePBSHead() []string {
 		"#PBS -N go-cart",
 		"#PBS -S /bin/bash",
 		"#PBS -j oe",
-		// "#PBS -o /dev/null",
+		"#PBS -o /dev/null",
 		"#PBS -W umask=022",
 		"#PBS -l walltime=00:30:00",
 		"#PBS -l ncpus=1",
@@ -216,25 +217,93 @@ func WritePBS(pbsfile, molprofile string, count int) {
 }
 
 func Make2D(i, j int) []Job {
-	if i == j {
+	switch {
+	case i == j:
 		// E(+i+i) - 2*E(0) + E(-i-i) / (2d)^2
 		return []Job{Job{1, HashName(), 0, 0, []int{i, i}, "queued", 0, 0},
 			Job{-2, "E0", 0, 0, []int{i, i}, "queued", 0, 0},
 			Job{1, HashName(), 0, 0, []int{-i, -i}, "queued", 0, 0}}
-	} else {
+	case i != j:
 		// E(+i+j) - E(+i-j) - E(-i+j) + E(-i-j) / (2d)^2
 		return []Job{Job{1, HashName(), 0, 0, []int{i, j}, "queued", 0, 0},
 			Job{-1, HashName(), 0, 0, []int{i, -j}, "queued", 0, 0},
 			Job{-1, HashName(), 0, 0, []int{-i, j}, "queued", 0, 0},
 			Job{1, HashName(), 0, 0, []int{-i, -j}, "queued", 0, 0}}
+	default:
+		panic("No cases matched")
 	}
+}
 
+func Make3D(i, j, k int) []Job {
+	switch {
+	case i == j && i == k:
+		// E(+i+i+i) - 3*E(i) + 3*E(-i) -E(-i-i-i) / (2d)^3
+		return []Job{
+			Job{1, HashName(), 0, 0, []int{i, i, i}, "queued", 0, 0},
+			Job{-3, HashName(), 0, 0, []int{i}, "queued", 0, 0},
+			Job{3, HashName(), 0, 0, []int{-i}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -i}, "queued", 0, 0}}
+	case i == j && i != k:
+		return []Job{
+			Job{1, HashName(), 0, 0, []int{i, i, k}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, -k}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -k}, "queued", 0, 0}}
+	case i == k && i != j:
+		return []Job{
+			Job{1, HashName(), 0, 0, []int{i, i, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, -j}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -j}, "queued", 0, 0}}
+	case j == k && i != j:
+		return []Job{
+			Job{1, HashName(), 0, 0, []int{j, j, i}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{i}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-j, -j, i}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{j, j, -i}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-i}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-j, -j, -i}, "queued", 0, 0}}
+	case i != j && i != k && j != k:
+		return []Job{
+			Job{1, HashName(), 0, 0, []int{i, j, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, -j, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, j, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -j, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, j, -k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{i, -j, -k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, j, -k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -j, -k}, "queued", 0, 0}}
+	default:
+		panic("No cases matched")
+	}
+}
+
+func Make4D(i, j, k, l int) []Job {
+	switch {
+	case i == j && i == k && i == l:
+		return []Job{
+			Job{1, HashName(), 0, 0, []int{i, i, i, i}, "queued", 0, 0},
+			Job{-4, HashName(), 0, 0, []int{i, i}, "queued", 0, 0},
+			Job{6, "E0", 0, 0, []int{}, "queued", 0, 0},
+			Job{-4, HashName(), 0, 0, []int{-i, -i}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, -i, -i}, "queued", 0, 0}}
+	default:
+		panic("No cases matched")
+	}
 }
 
 func Derivative(dims ...int) []Job {
 	switch len(dims) {
 	case 2:
 		return Make2D(dims[0], dims[1])
+	case 3:
+		return Make3D(dims[0], dims[1], dims[2])
+		// case 4:
+		// 	return Make4D(dims[0], dims[1], dims[2], dims[3])
 	}
 	return []Job{Job{}}
 }
@@ -279,15 +348,6 @@ func BuildJobList(names []string, coords []float64) (joblist []Job) {
 	return
 }
 
-func Qstat(jobnum string) string {
-	qstatus, _ := exec.Command("qstat", jobnum).Output()
-	qlines := strings.Split(string(qstatus), "\n")
-	if len(qlines) == 4 {
-		return SplitLine(qlines[2])[4]
-	}
-	return "done"
-}
-
 func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup, ch chan int) {
 	defer wg.Done()
 	coords = Step(coords, job.Steps...)
@@ -297,24 +357,17 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 	WriteMolproIn(molprofile, names, coords)
 	WritePBS(pbsfile, molprofile, job.Count)
 	job.Number = Qsubmit(pbsfile)
-	// this is the place to check for queue status if energy not found
-	// failing when file exists but not written to
-	// if file exists and there's no energy=/pattern match AND not in queue, resubmit
-	// jobnum := strconv.Itoa(job.Number)
 	energy, err := ReadMolproOut(outfile)
-	sigChan := make(chan os.Signal, 1)
-	sigWant := os.Signal(syscall.Signal(job.Count))
-	signal.Notify(sigChan, sigWant)
-	fmt.Println("want signal", sigWant)
-	s := <-sigChan
-	fmt.Println("Got signal", s)
-	energy, err = ReadMolproOut(outfile)
-	job.Retries++
-	if job.Retries > 10 {
-		fmt.Fprintf(os.Stderr, "having problems with %s\n", outfile)
-		job.Number = Qsubmit(pbsfile)
-		// jobnum = strconv.Itoa(job.Number)
-		job.Retries = 0
+	for err != nil && job.Retries < maxRetries {
+		sigChan := make(chan os.Signal, 1)
+		sigWant := os.Signal(syscall.Signal(job.Count))
+		signal.Notify(sigChan, sigWant)
+		<-sigChan
+		energy, err = ReadMolproOut(outfile)
+		if err != nil {
+			Qsubmit(pbsfile)
+		}
+		job.Retries++
 	}
 	if err != nil {
 		panic(err)
@@ -350,6 +403,30 @@ func PrintFile15(fcs [][]float64) {
 	}
 
 }
+
+// TODO
+// func PrintFile30(fcs [][][]float64) {
+// 	flat := make([]float64, 0)
+// 	for _, v := range fcs {
+// 		flat = append(flat, v...)
+// 	}
+// 	for i := 0; i < len(flat); i += 3 {
+// 		fmt.Printf("%20.10f%20.10f%20.10f\n", flat[i], flat[i+1], flat[i+2])
+// 	}
+
+// }
+
+// TODO
+// func PrintFile40(fcs [][][]float64) {
+// 	flat := make([]float64, 0)
+// 	for _, v := range fcs {
+// 		flat = append(flat, v...)
+// 	}
+// 	for i := 0; i < len(flat); i += 3 {
+// 		fmt.Printf("%20.10f%20.10f%20.10f\n", flat[i], flat[i+1], flat[i+2])
+// 	}
+
+// }
 
 func IntAbs(n int) int {
 	if n < 0 {
@@ -407,18 +484,17 @@ func main() {
 	}
 
 	ch := make(chan int, concRoutines)
-	count := 34 // SIGRTMIN
+	count := RTMIN // SIGRTMIN
 	for j, _ := range jobGroup {
 		if jobGroup[j].Name != "E0" {
 			wg.Add(1)
 			ch <- 1
 			jobGroup[j].Count = count
-			if count == 64 {
-				count = 34
+			if count == RTMAX {
+				count = RTMIN
 			} else {
 				count++
 			}
-			fmt.Println(jobGroup[j].Count)
 			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch)
 		} else {
 			jobGroup[j].Status = "done"
@@ -454,11 +530,22 @@ func main() {
 			fcs4[x][y][z][w] += jobGroup[j].Coeff * jobGroup[j].Result
 		}
 	}
-	// hard coded second derivative scaling factor and denominator
+
 	for i := 0; i < ncoords; i++ {
 		for j := 0; j < ncoords; j++ {
 			fcs2[i][j] = fcs2[i][j] * angborh * angborh / (4 * delta * delta)
+			for k := 0; k < ncoords; k++ {
+				fcs3[i][j][k] = fcs3[i][j][k] * angborh * angborh * angborh / (8 * delta * delta * delta)
+				for l := 0; l < ncoords; l++ {
+					fcs4[i][j][k][l] = fcs4[i][j][k][l] * angborh * angborh * angborh * angborh / (16 * delta * delta * delta * delta)
+				}
+			}
 		}
 	}
 	PrintFile15(fcs2)
+	// PrintFile30(fcs3)
+	// PrintFile40(fcs4)
 }
+
+// TODO Add Index field to Job to separate from steps since some steps have different numbers of fields
+// TODO update this in the cases just above here ^, .Steps -> .Index
