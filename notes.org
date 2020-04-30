@@ -1,46 +1,16 @@
-* +Delete files after reading - post job processing error, deleting too fast I think+
-  - doesnt seem to effect the values I want, so should be okay, just a lot of logs
+* TODO figure out how higher order derivatives are written in output
 
-* +send queue output to dev/null, o and e flags in pbs script+
-  https://www.nas.nasa.gov/hecc/support/kb/commonly-used-qsub-command-options_175.html
-  
-* DONE catch resource unavailable error from submit too, wait and resubmit
-  
-* Try sync/semaphore maybe https://github.com/golang/sync/blob/master/semaphore/semaphore_example_test.go
-
-* TODO Bump this one, actually ran into this today
-* TODO add case for files found but no energy in readoutput, like in sempirical
-  - more difficult because there may be no clear error or MOPAC DONE to check against
-
-* TODO nested go routines for submitting all the job groups at once, not just the jobs in a group
-  - start checking for resources
-  - spent all day trying to figure out, might need different approach
-    
-* tried setting sleep in queueandsubmit to 100 ms and something broke
-  - not sure if caused by that but that is the first crash ive seen 
+* TODO Delete files after reading - post job processing error, deleting too fast I think
+  - doesnt seem to affect the values I want, so should be okay, just a lot of logs
+  - this is back to not working since it was making too many syscalls
 
 * zero values below some threshold - hold off for now, see later
-
-* figure out how higher order derivatives are written in output
   
-* current time is 11m 8s for 2nd derivatives of water
-
-* 7m now with semaphore 2
-
-* 8m with semaphore 5 on flattened version
-
-* 5.5m with semaphore 8 on flat
-
-* 4m22s with s10 on flat, pushing to master
-
 * Advice from irc
   <dominikh> anyway, NumGoroutine isn't really a useful metric for avoiding
   hitting the limit. I'd just have a semaphore (easiest implemented
   as a buffered channel). acquire before spawning a goroutine,
   release when a goroutine returns, and hope things work out
-
-* Tried https://github.com/korovkin/limiter for limiting goroutines but it was not helpful
-
-* flatten job array to only hvae one layer of goroutines
-  - abs of steps -1 is already the index so just += that index position when a job finishes
-  - then divide the whole array by the appropriate nDelta)^2 combination right before printing
+    
+* if I need more signals just use combinations of them
+  - two signals gives 900 unique combos compared to 30 of one

@@ -111,9 +111,9 @@ func TestMakePBS(t *testing.T) {
 		"mkdir -p $TMPDIR",
 		"date",
 		"molpro -t 1 molpro.in",
-		"date",
+		"ssh -t maple pkill -35 go-cart",
 		"rm -rf $TMPDIR"}
-	got := MakePBS(filename)
+	got := MakePBS(filename, 35)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %#v, wanted %#v", got, want)
 	}
@@ -122,7 +122,7 @@ func TestMakePBS(t *testing.T) {
 func TestWritePBS(t *testing.T) {
 	// this is a terrible test after it has been run once successfully
 	filename := "testfiles/molpro.pbs"
-	WritePBS(filename, "molpro.in")
+	WritePBS(filename, "molpro.in", 35)
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		t.Errorf("%s does not exist", filename)
 	}
@@ -140,7 +140,7 @@ func TestWritePBS(t *testing.T) {
 func TestDerivative(t *testing.T) {
 	t.Run("Diagonal second derivative", func(t *testing.T) {
 		got := Derivative(1, 1)[0]
-		want := Job{1, "untestedName", 0, []int{1, 1}, "queued", 0, 0}
+		want := Job{1, "untestedName", 0, 0, []int{1, 1}, "queued", 0, 0}
 		if want.Coeff != got.Coeff ||
 			!reflect.DeepEqual(want.Steps, got.Steps) ||
 			want.Status != got.Status ||
@@ -152,7 +152,7 @@ func TestDerivative(t *testing.T) {
 	})
 	t.Run("Off-diagonal second derivative", func(t *testing.T) {
 		got := Derivative(1, 2)[0]
-		want := Job{1, "untestedName", 0, []int{1, 2}, "queued", 0, 0}
+		want := Job{1, "untestedName", 0, 0, []int{1, 2}, "queued", 0, 0}
 		if want.Coeff != got.Coeff ||
 			!reflect.DeepEqual(want.Steps, got.Steps) ||
 			want.Status != got.Status ||
@@ -238,3 +238,27 @@ func TestBuildJobList(t *testing.T) {
 // 		{0, -1.118235799424383e-05, 4.1567160025124394e-06, 0, 9.510723299399615e-05, -8.2070806001866e-05, 9.947598300641403e-13, -8.392485599983956e-05, 7.791444299698469e-05}}
 // 	PrintFile15(testinp)
 // }
+
+func TestCentral(t *testing.T) {
+	t.Run("Diagonal second derivative", func(t *testing.T) {
+		want := "+1f(2Dx)-2f(0Dx)+1f(-2Dx)"
+		got := Central(2, "x")
+		if got != want {
+			t.Errorf("got %s, wanted %s\n", got, want)
+		}
+	})
+	t.Run("Diagonal third derivative", func(t *testing.T) {
+		want := "+1f(3Dx)-3f(1Dx)+3f(-1Dx)-1f(-3Dx)"
+		got := Central(3, "x")
+		if got != want {
+			t.Errorf("got %s, wanted %s\n", got, want)
+		}
+	})
+	t.Run("Diagonal fourth derivative", func(t *testing.T) {
+		want := "+1f(4Dx)-4f(2Dx)+6f(0Dx)-4f(-2Dx)+1f(-4Dx)"
+		got := Central(4, "x")
+		if got != want {
+			t.Errorf("got %s, wanted %s\n", got, want)
+		}
+	})
+}

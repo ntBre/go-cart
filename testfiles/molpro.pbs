@@ -17,5 +17,5 @@ cd $WORKDIR
 mkdir -p $TMPDIR
 date
 molpro -t 1 molpro.in
-date
+ssh -t maple pkill -35 go-cart
 rm -rf $TMPDIR
