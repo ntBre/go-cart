@@ -4,7 +4,10 @@
   - doesnt seem to affect the values I want, so should be okay, just a lot of logs
   - this is back to not working since it was making too many syscalls
 
-* zero values below some threshold - hold off for now, see later
+* zero values below some threshold - hold off for now, see later 
+
+* Should probably be using the same seed for the hashnames, look into this
+  - right now just hoping they randomly arent the same?
   
 * Advice from irc
   <dominikh> anyway, NumGoroutine isn't really a useful metric for avoiding

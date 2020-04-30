@@ -219,15 +219,17 @@ func Make2D(i, j int) []Job {
 	switch {
 	case i == j:
 		// E(+i+i) - 2*E(0) + E(-i-i) / (2d)^2
-		return []Job{Job{1, HashName(), 0, 0, []int{i, i}, "queued", 0, 0},
-			Job{-2, "E0", 0, 0, []int{i, i}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i}, "queued", 0, 0}}
+		return []Job{
+			Job{1, HashName(), 0, 0, []int{i, i}, []int{i, i}, "queued", 0, 0},
+			Job{-2, "E0", 0, 0, []int{}, []int{i, i}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i}, []int{i, i}, "queued", 0, 0}}
 	case i != j:
 		// E(+i+j) - E(+i-j) - E(-i+j) + E(-i-j) / (2d)^2
-		return []Job{Job{1, HashName(), 0, 0, []int{i, j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, -j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -j}, "queued", 0, 0}}
+		return []Job{
+			Job{1, HashName(), 0, 0, []int{i, j}, []int{i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, -j}, []int{i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, j}, []int{i, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -j}, []int{i, j}, "queued", 0, 0}}
 	default:
 		panic("No cases matched")
 	}
@@ -238,44 +240,44 @@ func Make3D(i, j, k int) []Job {
 	case i == j && i == k:
 		// E(+i+i+i) - 3*E(i) + 3*E(-i) -E(-i-i-i) / (2d)^3
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, i}, "queued", 0, 0},
-			Job{-3, HashName(), 0, 0, []int{i}, "queued", 0, 0},
-			Job{3, HashName(), 0, 0, []int{-i}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, -i}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, i}, []int{i, i, i}, "queued", 0, 0},
+			Job{-3, HashName(), 0, 0, []int{i}, []int{i, i, i}, "queued", 0, 0},
+			Job{3, HashName(), 0, 0, []int{-i}, []int{i, i, i}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -i}, []int{i, i, i}, "queued", 0, 0}}
 	case i == j && i != k:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, k}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{k}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, i, -k}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{-k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, -k}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, k}, []int{i, i, k}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{k}, []int{i, i, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, k}, []int{i, i, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, -k}, []int{i, i, k}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-k}, []int{i, i, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -k}, []int{i, i, k}, "queued", 0, 0}}
 	case i == k && i != j:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, j}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, i, -j}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{-j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, -j}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, j}, []int{i, i, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{j}, []int{i, i, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, j}, []int{i, i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, -j}, []int{i, i, j}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-j}, []int{i, i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -j}, []int{i, i, j}, "queued", 0, 0}}
 	case j == k && i != j:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{j, j, i}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{i}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-j, -j, i}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{j, j, -i}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{-i}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-j, -j, -i}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{j, j, i}, []int{j, j, i}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{i}, []int{j, j, i}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-j, -j, i}, []int{j, j, i}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{j, j, -i}, []int{j, j, i}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-i}, []int{j, j, i}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-j, -j, -i}, []int{j, j, i}, "queued", 0, 0}}
 	case i != j && i != k && j != k:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, j, k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, -j, k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, j, k}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -j, k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, j, -k}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{i, -j, -k}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, j, -k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -j, -k}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, j, k}, []int{i, j, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, -j, k}, []int{i, j, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, j, k}, []int{i, j, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -j, k}, []int{i, j, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, j, -k}, []int{i, j, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{i, -j, -k}, []int{i, j, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, j, -k}, []int{i, j, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -j, -k}, []int{i, j, k}, "queued", 0, 0}}
 	default:
 		panic("No cases matched")
 	}
@@ -286,196 +288,196 @@ func Make4D(i, j, k, l int) []Job {
 	// all the same
 	case i == j && i == k && i == l:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, i, i}, "queued", 0, 0},
-			Job{-4, HashName(), 0, 0, []int{i, i}, "queued", 0, 0},
-			Job{6, "E0", 0, 0, []int{}, "queued", 0, 0},
-			Job{-4, HashName(), 0, 0, []int{-i, -i}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, -i, -i}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, i, i}, []int{i, i, i, i}, "queued", 0, 0},
+			Job{-4, HashName(), 0, 0, []int{i, i}, []int{i, i, i, i}, "queued", 0, 0},
+			Job{6, "E0", 0, 0, []int{}, []int{i, i, i, i}, "queued", 0, 0},
+			Job{-4, HashName(), 0, 0, []int{-i, -i}, []int{i, i, i, i}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, -i, -i}, []int{i, i, i, i}, "queued", 0, 0}}
 	// 3 and 1
 	case i == j && i == k && i != l:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, i, l}, "queued", 0, 0},
-			Job{-3, HashName(), 0, 0, []int{i, l}, "queued", 0, 0},
-			Job{3, HashName(), 0, 0, []int{-i, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, -i, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, i, i, -l}, "queued", 0, 0},
-			Job{3, HashName(), 0, 0, []int{i, -l}, "queued", 0, 0},
-			Job{-3, HashName(), 0, 0, []int{-i, -l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, -i, -l}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, i, l}, []int{i, i, i, l}, "queued", 0, 0},
+			Job{-3, HashName(), 0, 0, []int{i, l}, []int{i, i, i, l}, "queued", 0, 0},
+			Job{3, HashName(), 0, 0, []int{-i, l}, []int{i, i, i, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -i, l}, []int{i, i, i, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, i, -l}, []int{i, i, i, l}, "queued", 0, 0},
+			Job{3, HashName(), 0, 0, []int{i, -l}, []int{i, i, i, l}, "queued", 0, 0},
+			Job{-3, HashName(), 0, 0, []int{-i, -l}, []int{i, i, i, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, -i, -l}, []int{i, i, i, l}, "queued", 0, 0}}
 	case i == j && i == l && i != k:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, i, k}, "queued", 0, 0},
-			Job{-3, HashName(), 0, 0, []int{i, k}, "queued", 0, 0},
-			Job{3, HashName(), 0, 0, []int{-i, k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, -i, k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, i, i, -k}, "queued", 0, 0},
-			Job{3, HashName(), 0, 0, []int{i, -k}, "queued", 0, 0},
-			Job{-3, HashName(), 0, 0, []int{-i, -k}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, -i, -k}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, i, k}, []int{i, i, i, k}, "queued", 0, 0},
+			Job{-3, HashName(), 0, 0, []int{i, k}, []int{i, i, i, k}, "queued", 0, 0},
+			Job{3, HashName(), 0, 0, []int{-i, k}, []int{i, i, i, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -i, k}, []int{i, i, i, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, i, -k}, []int{i, i, i, k}, "queued", 0, 0},
+			Job{3, HashName(), 0, 0, []int{i, -k}, []int{i, i, i, k}, "queued", 0, 0},
+			Job{-3, HashName(), 0, 0, []int{-i, -k}, []int{i, i, i, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, -i, -k}, []int{i, i, i, k}, "queued", 0, 0}}
 	case i == k && i == l && i != j:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, i, j}, "queued", 0, 0},
-			Job{-3, HashName(), 0, 0, []int{i, j}, "queued", 0, 0},
-			Job{3, HashName(), 0, 0, []int{-i, j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, -i, j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, i, i, -j}, "queued", 0, 0},
-			Job{3, HashName(), 0, 0, []int{i, -j}, "queued", 0, 0},
-			Job{-3, HashName(), 0, 0, []int{-i, -j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, -i, -j}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, i, j}, []int{i, i, i, j}, "queued", 0, 0},
+			Job{-3, HashName(), 0, 0, []int{i, j}, []int{i, i, i, j}, "queued", 0, 0},
+			Job{3, HashName(), 0, 0, []int{-i, j}, []int{i, i, i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -i, j}, []int{i, i, i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, i, -j}, []int{i, i, i, j}, "queued", 0, 0},
+			Job{3, HashName(), 0, 0, []int{i, -j}, []int{i, i, i, j}, "queued", 0, 0},
+			Job{-3, HashName(), 0, 0, []int{-i, -j}, []int{i, i, i, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, -i, -j}, []int{i, i, i, j}, "queued", 0, 0}}
 	case j == k && j == l && j != i:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{j, j, j, i}, "queued", 0, 0},
-			Job{-3, HashName(), 0, 0, []int{j, i}, "queued", 0, 0},
-			Job{3, HashName(), 0, 0, []int{-j, i}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-j, -j, -j, i}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{j, j, j, -i}, "queued", 0, 0},
-			Job{3, HashName(), 0, 0, []int{j, -i}, "queued", 0, 0},
-			Job{-3, HashName(), 0, 0, []int{-j, -i}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-j, -j, -j, -i}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{j, j, j, i}, []int{j, j, j, i}, "queued", 0, 0},
+			Job{-3, HashName(), 0, 0, []int{j, i}, []int{j, j, j, i}, "queued", 0, 0},
+			Job{3, HashName(), 0, 0, []int{-j, i}, []int{j, j, j, i}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-j, -j, -j, i}, []int{j, j, j, i}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{j, j, j, -i}, []int{j, j, j, i}, "queued", 0, 0},
+			Job{3, HashName(), 0, 0, []int{j, -i}, []int{j, j, j, i}, "queued", 0, 0},
+			Job{-3, HashName(), 0, 0, []int{-j, -i}, []int{j, j, j, i}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-j, -j, -j, -i}, []int{j, j, j, i}, "queued", 0, 0}}
 	// 2 and 1 and 1
 	case i == j && i != k && i != l && k != l:
 		// x -> i, y -> k, z -> l
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, k, l}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{k, l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, k, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, i, -k, l}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{-k, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, -k, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, i, k, -l}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{k, -l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, k, -l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{i, i, -k, -l}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-k, -l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, -k, -l}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, k, l}, []int{i, i, k, l}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{k, l}, []int{i, i, k, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, k, l}, []int{i, i, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, -k, l}, []int{i, i, k, l}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-k, l}, []int{i, i, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -k, l}, []int{i, i, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, k, -l}, []int{i, i, k, l}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{k, -l}, []int{i, i, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, k, -l}, []int{i, i, k, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{i, i, -k, -l}, []int{i, i, k, l}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-k, -l}, []int{i, i, k, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, -k, -l}, []int{i, i, k, l}, "queued", 0, 0}}
 	case i == k && i != j && i != l && j != l:
 		// x -> i, y -> j, z -> l
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, j, l}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{j, l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, j, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, i, -j, l}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{-j, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, -j, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, i, j, -l}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{j, -l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, j, -l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{i, i, -j, -l}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-j, -l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, -j, -l}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, j, l}, []int{i, i, j, l}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{j, l}, []int{i, i, j, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, j, l}, []int{i, i, j, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, -j, l}, []int{i, i, j, l}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-j, l}, []int{i, i, j, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -j, l}, []int{i, i, j, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, j, -l}, []int{i, i, j, l}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{j, -l}, []int{i, i, j, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, j, -l}, []int{i, i, j, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{i, i, -j, -l}, []int{i, i, j, l}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-j, -l}, []int{i, i, j, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, -j, -l}, []int{i, i, j, l}, "queued", 0, 0}}
 	case i == l && i != j && i != k && j != k:
 		// x -> i, y -> k, z -> j
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, k, j}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{k, j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, k, j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, i, -k, j}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{-k, j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, -k, j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, i, k, -j}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{k, -j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -i, k, -j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{i, i, -k, -j}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-k, -j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, -k, -j}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, k, j}, []int{i, i, k, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{k, j}, []int{i, i, k, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, k, j}, []int{i, i, k, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, -k, j}, []int{i, i, k, j}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-k, j}, []int{i, i, k, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, -k, j}, []int{i, i, k, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, i, k, -j}, []int{i, i, k, j}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{k, -j}, []int{i, i, k, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -i, k, -j}, []int{i, i, k, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{i, i, -k, -j}, []int{i, i, k, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-k, -j}, []int{i, i, k, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, -k, -j}, []int{i, i, k, j}, "queued", 0, 0}}
 	case j == k && j != i && j != l && i != l:
 		// x -> j, y -> i, z -> l
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{j, j, i, l}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{i, l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-j, -j, i, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{j, j, -i, l}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{-i, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-j, -j, -i, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{j, j, i, -l}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{i, -l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-j, -j, i, -l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{j, j, -i, -l}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-i, -l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-j, -j, -i, -l}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{j, j, i, l}, []int{j, j, i, l}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{i, l}, []int{j, j, i, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-j, -j, i, l}, []int{j, j, i, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{j, j, -i, l}, []int{j, j, i, l}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-i, l}, []int{j, j, i, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-j, -j, -i, l}, []int{j, j, i, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{j, j, i, -l}, []int{j, j, i, l}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{i, -l}, []int{j, j, i, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-j, -j, i, -l}, []int{j, j, i, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{j, j, -i, -l}, []int{j, j, i, l}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-i, -l}, []int{j, j, i, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-j, -j, -i, -l}, []int{j, j, i, l}, "queued", 0, 0}}
 	case j == l && j != i && j != k && i != k:
 		// x -> j, y -> i, z -> k
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{j, j, i, k}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{i, k}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-j, -j, i, k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{j, j, -i, k}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{-i, k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-j, -j, -i, k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{j, j, i, -k}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{i, -k}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-j, -j, i, -k}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{j, j, -i, -k}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-i, -k}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-j, -j, -i, -k}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{j, j, i, k}, []int{j, j, i, k}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{i, k}, []int{j, j, i, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-j, -j, i, k}, []int{j, j, i, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{j, j, -i, k}, []int{j, j, i, k}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-i, k}, []int{j, j, i, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-j, -j, -i, k}, []int{j, j, i, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{j, j, i, -k}, []int{j, j, i, k}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{i, -k}, []int{j, j, i, k}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-j, -j, i, -k}, []int{j, j, i, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{j, j, -i, -k}, []int{j, j, i, k}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-i, -k}, []int{j, j, i, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-j, -j, -i, -k}, []int{j, j, i, k}, "queued", 0, 0}}
 	case k == l && k != i && k != j && i != j:
 		// x -> k, y -> i, z -> j
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{k, k, i, j}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{i, j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-k, -k, i, j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{k, k, -i, j}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{-i, j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-k, -k, -i, j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{k, k, i, -j}, "queued", 0, 0},
-			Job{2, HashName(), 0, 0, []int{i, -j}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-k, -k, i, -j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{k, k, -i, -j}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-i, -j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-k, -k, -i, -j}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{k, k, i, j}, []int{k, k, i, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{i, j}, []int{k, k, i, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-k, -k, i, j}, []int{k, k, i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{k, k, -i, j}, []int{k, k, i, j}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{-i, j}, []int{k, k, i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-k, -k, -i, j}, []int{k, k, i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{k, k, i, -j}, []int{k, k, i, j}, "queued", 0, 0},
+			Job{2, HashName(), 0, 0, []int{i, -j}, []int{k, k, i, j}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-k, -k, i, -j}, []int{k, k, i, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{k, k, -i, -j}, []int{k, k, i, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-i, -j}, []int{k, k, i, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-k, -k, -i, -j}, []int{k, k, i, j}, "queued", 0, 0}}
 	// 2 and 2
 	case i == j && k == l && i != k:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, k, k}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, -k, -k}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, k, k}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{i, i, -k, -k}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{i, i}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{k, k}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-i, -i}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-k, -k}, "queued", 0, 0},
-			Job{4, "E0", 0, 0, []int{}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, k, k}, []int{i, i, k, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, -k, -k}, []int{i, i, k, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, k, k}, []int{i, i, k, k}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{i, i, -k, -k}, []int{i, i, k, k}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{i, i}, []int{i, i, k, k}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{k, k}, []int{i, i, k, k}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-i, -i}, []int{i, i, k, k}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-k, -k}, []int{i, i, k, k}, "queued", 0, 0},
+			Job{4, "E0", 0, 0, []int{}, []int{i, i, k, k}, "queued", 0, 0}}
 	case i == k && j == l && i != j:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, j, j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, -j, -j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, j, j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{i, i, -j, -j}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{i, i}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{j, j}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-i, -i}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-j, -j}, "queued", 0, 0},
-			Job{4, "E0", 0, 0, []int{}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, j, j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, -j, -j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, j, j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{i, i, -j, -j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{i, i}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{j, j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-i, -i}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-j, -j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{4, "E0", 0, 0, []int{}, []int{i, i, j, j}, "queued", 0, 0}}
 	case i == l && j == k && i != j:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, i, j, j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, -j, -j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -i, j, j}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{i, i, -j, -j}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{i, i}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{j, j}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-i, -i}, "queued", 0, 0},
-			Job{-2, HashName(), 0, 0, []int{-j, -j}, "queued", 0, 0},
-			Job{4, "E0", 0, 0, []int{}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, i, j, j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, -j, -j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -i, j, j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{i, i, -j, -j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{i, i}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{j, j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-i, -i}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{-2, HashName(), 0, 0, []int{-j, -j}, []int{i, i, j, j}, "queued", 0, 0},
+			Job{4, "E0", 0, 0, []int{}, []int{i, i, j, j}, "queued", 0, 0}}
 	// all different
 	case i != j && i != k && i != l && j != k && j != l && k != l:
 		return []Job{
-			Job{1, HashName(), 0, 0, []int{i, j, k, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, -j, k, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, j, k, l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -j, k, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, j, -k, l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{i, -j, -k, l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, j, -k, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -j, -k, l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, j, k, -l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{i, -j, k, -l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, j, k, -l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, -j, k, -l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{i, j, -k, -l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{i, -j, -k, -l}, "queued", 0, 0},
-			Job{-1, HashName(), 0, 0, []int{-i, j, -k, -l}, "queued", 0, 0},
-			Job{1, HashName(), 0, 0, []int{-i, -j, -k, -l}, "queued", 0, 0}}
+			Job{1, HashName(), 0, 0, []int{i, j, k, l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, -j, k, l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, j, k, l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -j, k, l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, j, -k, l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{i, -j, -k, l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, j, -k, l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -j, -k, l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, j, k, -l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{i, -j, k, -l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, j, k, -l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, -j, k, -l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{i, j, -k, -l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{i, -j, -k, -l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{-1, HashName(), 0, 0, []int{-i, j, -k, -l}, []int{i, j, k, l}, "queued", 0, 0},
+			Job{1, HashName(), 0, 0, []int{-i, -j, -k, -l}, []int{i, j, k, l}, "queued", 0, 0}}
 	default:
 		panic("No cases matched")
 	}
@@ -498,7 +500,8 @@ type Job struct {
 	Name    string
 	Number  int
 	Count   int
-	Steps   []int // doubles as index in array
+	Steps   []int
+	Index   []int
 	Status  string
 	Retries int
 	Result  float64
@@ -525,15 +528,22 @@ func HashName() string {
 }
 
 func BuildJobList(names []string, coords []float64) (joblist []Job) {
-	for i := 1; i <= len(coords); i++ {
-		for j := 1; j <= len(coords); j++ {
+	ncoords := len(coords)
+	for i := 1; i <= ncoords; i++ {
+		for j := 1; j <= ncoords; j++ {
 			joblist = append(joblist, Derivative(i, j)...)
+			for k := 1; k <= ncoords; k++ {
+				joblist = append(joblist, Derivative(i, j, k)...)
+				for l := 1; l <= ncoords; l++ {
+					joblist = append(joblist, Derivative(i, j, k, l)...)
+				}
+			}
 		}
 	}
 	return
 }
 
-func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup, ch chan int) {
+func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup, ch chan int, jobnum, totalJobs int) {
 	defer wg.Done()
 	coords = Step(coords, job.Steps...)
 	molprofile := "inp/" + job.Name + ".inp"
@@ -559,6 +569,7 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 	}
 	job.Status = "done"
 	job.Result = energy
+	fmt.Fprintf(os.Stderr, "%d/%d jobs completed\n", jobnum, totalJobs)
 	<-ch
 }
 
@@ -593,7 +604,7 @@ func PrintFile15(fcs [][]float64) {
 
 // TODO
 // func PrintFile30(fcs [][][]float64) {
-// 	flat := make([]float64, 0)
+// 	flat := make([][]float64, 0)
 // 	for _, v := range fcs {
 // 		flat = append(flat, v...)
 // 	}
@@ -682,7 +693,7 @@ func main() {
 			} else {
 				count++
 			}
-			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch)
+			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch, j, len(jobGroup))
 		} else {
 			jobGroup[j].Status = "done"
 			jobGroup[j].Result = E0
@@ -690,26 +701,26 @@ func main() {
 	}
 	wg.Wait()
 	for j, _ := range jobGroup {
-		switch len(jobGroup[j].Steps) {
+		switch len(jobGroup[j].Index) {
 		case 2:
-			x := jobGroup[j].Steps[0]
-			y := jobGroup[j].Steps[1]
+			x := jobGroup[j].Index[0]
+			y := jobGroup[j].Index[1]
 			x = IntAbs(x) - 1
 			y = IntAbs(y) - 1
 			fcs2[x][y] += jobGroup[j].Coeff * jobGroup[j].Result
 		case 3:
-			x := jobGroup[j].Steps[0]
-			y := jobGroup[j].Steps[1]
-			z := jobGroup[j].Steps[2]
+			x := jobGroup[j].Index[0]
+			y := jobGroup[j].Index[1]
+			z := jobGroup[j].Index[2]
 			x = IntAbs(x) - 1
 			y = IntAbs(y) - 1
 			z = IntAbs(z) - 1
 			fcs3[x][y][z] += jobGroup[j].Coeff * jobGroup[j].Result
 		case 4:
-			x := jobGroup[j].Steps[0]
-			y := jobGroup[j].Steps[1]
-			z := jobGroup[j].Steps[2]
-			w := jobGroup[j].Steps[3]
+			x := jobGroup[j].Index[0]
+			y := jobGroup[j].Index[1]
+			z := jobGroup[j].Index[2]
+			w := jobGroup[j].Index[3]
 			x = IntAbs(x) - 1
 			y = IntAbs(y) - 1
 			z = IntAbs(z) - 1
@@ -730,9 +741,8 @@ func main() {
 		}
 	}
 	PrintFile15(fcs2)
+	fmt.Println(fcs3)
+	fmt.Println(fcs4)
 	// PrintFile30(fcs3)
 	// PrintFile40(fcs4)
 }
-
-// TODO Add Index field to Job to separate from steps since some steps have different numbers of fields
-// TODO update this in the cases just above here ^, .Steps -> .Index
