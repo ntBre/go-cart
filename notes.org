@@ -1,13 +1,27 @@
+* TODO THOROUGHLY RETHINK RETRIES -> I've been calling it twice if it fails to read
+  - no I havent, the qsubmit one was local and that's the only one causing trouble
+  - probably just forget about it, everything should work eventually <- trying this now
+    
+* TODO try keeping garbage list and tacking some on to every pbs job
+  - hopefully deletes on compute node, saving me resources on head
+
+* TODO option for different derivative levels
+
+* TODO checkpoint system - resume from incomplete run
+
 * TODO figure out how higher order derivatives are written in output
 
-* TODO Delete files after reading - post job processing error, deleting too fast I think
-  - doesnt seem to affect the values I want, so should be okay, just a lot of logs
+* TODO Delete files after reading
   - this is back to not working since it was making too many syscalls
-
-* zero values below some threshold - hold off for now, see later 
+    
+* TODO input file with 
+  - geometry
+  - number of concurrent jobs
+  - when to write checkpoints
+  - molpro job information
 
 * Should probably be using the same seed for the hashnames, look into this
-  - right now just hoping they randomly arent the same?
+  - right now just hoping they arent randomly the same?
   
 * Advice from irc
   <dominikh> anyway, NumGoroutine isn't really a useful metric for avoiding
@@ -17,3 +31,5 @@
     
 * if I need more signals just use combinations of them
   - two signals gives 900 unique combos compared to 30 of one
+
+* zero values below some threshold - hold off for now, see later 

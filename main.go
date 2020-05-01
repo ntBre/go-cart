@@ -153,9 +153,14 @@ func Basename(filename string) string {
 }
 
 func Qsubmit(filename string) int {
-
+	// TODO try without these locks?
+	// locks hold thread in case that's the problem with qsub
+	// but if this is not the problem it slows the program down
 	runtime.LockOSThread()
-	out, err := exec.Command("qsub", filename).Output()
+	// -f option to run qsub in foreground
+	// maybe trying to communicate with background daemon
+	//     was overloading requests and causing panic?
+	out, err := exec.Command("qsub", "-f", filename).Output()
 	runtime.UnlockOSThread()
 	retries := 0
 	for err != nil {
@@ -164,7 +169,9 @@ func Qsubmit(filename string) int {
 			time.Sleep(time.Second)
 			out, err = exec.Command("qsub", filename).Output()
 			runtime.UnlockOSThread()
-			retries++
+			// try with infinite retries
+			// this could potentially cause the whole program to halt if it never goes?
+			// retries++
 		} else {
 			panic(fmt.Sprintf("Qsubmit failed after %d retries", retries))
 		}
@@ -557,19 +564,25 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 		sigChan := make(chan os.Signal, 1)
 		sigWant := os.Signal(syscall.Signal(job.Count))
 		signal.Notify(sigChan, sigWant)
-		<-sigChan
+		select {
+		case <-sigChan: // either receive signal
+		case <-time.After(60 * time.Second): // or timeout after 1 minute and retry
+			// probably going to crash if this happens because After is not an os.Signal which the channel expects
+		}
 		energy, err = ReadMolproOut(outfile)
 		if err != nil {
 			Qsubmit(pbsfile)
 		}
-		job.Retries++
+		// RETRY INDEFINITELY
+		// job.Retries++
 	}
 	if err != nil {
 		panic(err)
 	}
 	job.Status = "done"
 	job.Result = energy
-	fmt.Fprintf(os.Stderr, "%d/%d jobs completed\n", jobnum, totalJobs)
+	fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", jobnum, totalJobs,
+		100*float64(jobnum)/float64(totalJobs))
 	<-ch
 }
 
