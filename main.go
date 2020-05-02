@@ -22,7 +22,6 @@ const (
 	energyLine  = "energy="
 	brokenFloat = 999.999
 	angborh     = 0.529177249
-	maxRetries  = 5
 	progName    = "go-cart"
 	RTMIN       = 35
 	RTMAX       = 64
@@ -153,28 +152,17 @@ func Basename(filename string) string {
 }
 
 func Qsubmit(filename string) int {
-	// TODO try without these locks?
-	// locks hold thread in case that's the problem with qsub
-	// but if this is not the problem it slows the program down
 	runtime.LockOSThread()
 	// -f option to run qsub in foreground
 	// maybe trying to communicate with background daemon
 	//     was overloading requests and causing panic?
 	out, err := exec.Command("qsub", "-f", filename).Output()
 	runtime.UnlockOSThread()
-	retries := 0
 	for err != nil {
-		if retries < maxRetries {
-			runtime.LockOSThread()
-			time.Sleep(time.Second)
-			out, err = exec.Command("qsub", filename).Output()
-			runtime.UnlockOSThread()
-			// try with infinite retries
-			// this could potentially cause the whole program to halt if it never goes?
-			// retries++
-		} else {
-			panic(fmt.Sprintf("Qsubmit failed after %d retries", retries))
-		}
+		runtime.LockOSThread()
+		time.Sleep(time.Second)
+		out, err = exec.Command("qsub", filename).Output()
+		runtime.UnlockOSThread()
 	}
 	b := Basename(string(out))
 	i, _ := strconv.Atoi(b)
@@ -534,15 +522,33 @@ func HashName() string {
 	return "job" + strconv.FormatUint(h.Sum64(), 16)
 }
 
-func BuildJobList(names []string, coords []float64) (joblist []Job) {
+func BuildJobList(names []string, coords []float64, nd int) (joblist []Job) {
 	ncoords := len(coords)
-	for i := 1; i <= ncoords; i++ {
-		for j := 1; j <= ncoords; j++ {
-			joblist = append(joblist, Derivative(i, j)...)
-			for k := 1; k <= ncoords; k++ {
-				joblist = append(joblist, Derivative(i, j, k)...)
-				for l := 1; l <= ncoords; l++ {
-					joblist = append(joblist, Derivative(i, j, k, l)...)
+	switch nd {
+	case 2:
+		for i := 1; i <= ncoords; i++ {
+			for j := 1; j <= ncoords; j++ {
+				joblist = append(joblist, Derivative(i, j)...)
+			}
+		}
+	case 3:
+		for i := 1; i <= ncoords; i++ {
+			for j := 1; j <= ncoords; j++ {
+				joblist = append(joblist, Derivative(i, j)...)
+				for k := 1; k <= ncoords; k++ {
+					joblist = append(joblist, Derivative(i, j, k)...)
+				}
+			}
+		}
+	case 4:
+		for i := 1; i <= ncoords; i++ {
+			for j := 1; j <= ncoords; j++ {
+				joblist = append(joblist, Derivative(i, j)...)
+				for k := 1; k <= ncoords; k++ {
+					joblist = append(joblist, Derivative(i, j, k)...)
+					for l := 1; l <= ncoords; l++ {
+						joblist = append(joblist, Derivative(i, j, k, l)...)
+					}
 				}
 			}
 		}
@@ -560,7 +566,7 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 	WritePBS(pbsfile, molprofile, job.Count)
 	job.Number = Qsubmit(pbsfile)
 	energy, err := ReadMolproOut(outfile)
-	for err != nil && job.Retries < maxRetries {
+	for err != nil {
 		sigChan := make(chan os.Signal, 1)
 		sigWant := os.Signal(syscall.Signal(job.Count))
 		signal.Notify(sigChan, sigWant)
@@ -568,13 +574,12 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 		case <-sigChan: // either receive signal
 		case <-time.After(60 * time.Second): // or timeout after 1 minute and retry
 			// probably going to crash if this happens because After is not an os.Signal which the channel expects
+			// bad if there's a queue
 		}
 		energy, err = ReadMolproOut(outfile)
 		if err != nil {
 			Qsubmit(pbsfile)
 		}
-		// RETRY INDEFINITELY
-		// job.Retries++
 	}
 	if err != nil {
 		panic(err)
@@ -602,9 +607,9 @@ func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan floa
 	c <- energy
 }
 
-func PrintFile15(fcs [][]float64) {
-	// TODO figure out what these numbers are
-	fmt.Printf("%5d%5d\n", 3, 18)
+func PrintFile15(fcs [][]float64) int {
+	natoms := len(fcs) / 3
+	fmt.Printf("%5d%5d\n", natoms, 6*natoms) // still not sure why this is just times 6
 	flat := make([]float64, 0)
 	for _, v := range fcs {
 		flat = append(flat, v...)
@@ -612,32 +617,48 @@ func PrintFile15(fcs [][]float64) {
 	for i := 0; i < len(flat); i += 3 {
 		fmt.Printf("%20.10f%20.10f%20.10f\n", flat[i], flat[i+1], flat[i+2])
 	}
-
+	return len(flat)
 }
 
-// TODO
-// func PrintFile30(fcs [][][]float64) {
-// 	flat := make([][]float64, 0)
-// 	for _, v := range fcs {
-// 		flat = append(flat, v...)
-// 	}
-// 	for i := 0; i < len(flat); i += 3 {
-// 		fmt.Printf("%20.10f%20.10f%20.10f\n", flat[i], flat[i+1], flat[i+2])
-// 	}
+func PrintFile30(fcs [][][]float64) {
+	natoms := len(fcs) / 3
+	N3N := natoms * 3 // from spectro manual pg 12
+	other := N3N * (N3N + 1) * (N3N + 2) / 6
+	fmt.Printf("%5d%5d\n", natoms, other)
+	flat := make([][]float64, 0)
+	flatter := make([]float64, 0)
+	for _, v := range fcs {
+		flat = append(flat, v...)
+	}
+	for _, v := range flat {
+		flatter = append(flatter, v...)
+	}
+	for i := 0; i < len(flatter); i += 3 {
+		fmt.Printf("%20.10f%20.10f%20.10f\n", flatter[i], flatter[i+1], flatter[i+2])
+	}
+}
 
-// }
-
-// TODO
-// func PrintFile40(fcs [][][]float64) {
-// 	flat := make([]float64, 0)
-// 	for _, v := range fcs {
-// 		flat = append(flat, v...)
-// 	}
-// 	for i := 0; i < len(flat); i += 3 {
-// 		fmt.Printf("%20.10f%20.10f%20.10f\n", flat[i], flat[i+1], flat[i+2])
-// 	}
-
-// }
+func PrintFile40(fcs [][][][]float64) {
+	natoms := len(fcs) / 3
+	N3N := natoms * 3 // from spectro manual pg 12
+	other := N3N * (N3N + 1) * (N3N + 2) * (N3N + 3) / 24
+	fmt.Printf("%5d%5d\n", natoms, other)
+	flat := make([][][]float64, 0)
+	flatter := make([][]float64, 0)
+	flattest := make([]float64, 0)
+	for _, v := range fcs {
+		flat = append(flat, v...)
+	}
+	for _, v := range flat {
+		flatter = append(flatter, v...)
+	}
+	for _, v := range flatter {
+		flattest = append(flattest, v...)
+	}
+	for i := 0; i < len(flattest); i += 3 {
+		fmt.Printf("%20.10f%20.10f%20.10f\n", flattest[i], flattest[i+1], flattest[i+2])
+	}
+}
 
 func IntAbs(n int) int {
 	if n < 0 {
@@ -647,18 +668,34 @@ func IntAbs(n int) int {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		panic("Input geometry not found in command line args")
-	}
-	geomfile := os.Args[1]
-	names, coords := ReadInputXYZ(geomfile)
-	ncoords := len(coords)
 
-	var concRoutines int
-	if len(os.Args) > 2 {
+	var (
+		concRoutines int = 5
+		nDerivative  int = 4
+		names        []string
+		coords       []float64
+		ncoords      int
+		wg           sync.WaitGroup
+	)
+
+	switch len(os.Args) {
+	case 1:
+		panic("Input geometry not found in command line args")
+	case 2:
+		geomfile := os.Args[1]
+		names, coords = ReadInputXYZ(geomfile)
+		ncoords = len(coords)
+	case 3:
+		geomfile := os.Args[1]
+		names, coords = ReadInputXYZ(geomfile)
+		ncoords = len(coords)
 		concRoutines, _ = strconv.Atoi(os.Args[2])
-	} else {
-		concRoutines = 5
+	case 4:
+		geomfile := os.Args[1]
+		names, coords = ReadInputXYZ(geomfile)
+		ncoords = len(coords)
+		concRoutines, _ = strconv.Atoi(os.Args[2])
+		nDerivative, _ = strconv.Atoi(os.Args[3])
 	}
 
 	if _, err := os.Stat("inp/"); os.IsNotExist(err) {
@@ -668,7 +705,7 @@ func main() {
 		os.Mkdir("inp", 0755)
 	}
 
-	var wg sync.WaitGroup
+	// run reference job
 	c := make(chan float64)
 	wg.Add(1)
 	go RefEnergy(names, coords, &wg, c)
@@ -676,20 +713,20 @@ func main() {
 	wg.Wait()
 	close(c)
 
-	jobGroup := BuildJobList(names, coords)
+	jobGroup := BuildJobList(names, coords, nDerivative)
 
 	fcs2 := make([][]float64, ncoords)
 	fcs3 := make([][][]float64, ncoords)
 	fcs4 := make([][][][]float64, ncoords)
 	for i := 0; i < ncoords; i++ {
 		fcs2[i] = make([]float64, ncoords)
-		fcs3[i] = make([][]float64, len(coords))
-		fcs4[i] = make([][][]float64, len(coords))
+		fcs3[i] = make([][]float64, ncoords)
+		fcs4[i] = make([][][]float64, ncoords)
 		for j := 0; j < ncoords; j++ {
-			fcs3[i][j] = make([]float64, len(coords))
-			fcs4[i][j] = make([][]float64, len(coords))
+			fcs3[i][j] = make([]float64, ncoords)
+			fcs4[i][j] = make([][]float64, ncoords)
 			for k := 0; k < ncoords; k++ {
-				fcs4[i][j][k] = make([]float64, len(coords))
+				fcs4[i][j][k] = make([]float64, ncoords)
 			}
 		}
 	}
@@ -753,9 +790,15 @@ func main() {
 			}
 		}
 	}
-	PrintFile15(fcs2)
-	fmt.Println(fcs3)
-	fmt.Println(fcs4)
-	// PrintFile30(fcs3)
-	// PrintFile40(fcs4)
+	switch nDerivative {
+	case 2:
+		PrintFile15(fcs2)
+	case 3:
+		PrintFile15(fcs2)
+		PrintFile30(fcs3)
+	case 4:
+		PrintFile15(fcs2)
+		PrintFile30(fcs3)
+		PrintFile40(fcs4)
+	}
 }
