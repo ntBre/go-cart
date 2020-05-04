@@ -118,9 +118,9 @@ func WriteMolproIn(filename string, names []string, coords []float64) {
 }
 
 func ReadMolproOut(filename string) (float64, error) {
-	runtime.LockOSThread()
+	// runtime.LockOSThread()
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		runtime.UnlockOSThread()
+		// runtime.UnlockOSThread()
 		return brokenFloat, ErrFileNotFound
 	}
 	lines := ReadFile(filename)
@@ -136,11 +136,11 @@ func ReadMolproOut(filename string) (float64, error) {
 			// for _, f := range files {
 			// 	os.Remove(f)
 			// }
-			runtime.UnlockOSThread()
+			// runtime.UnlockOSThread()
 			return f, nil
 		}
 	}
-	runtime.UnlockOSThread()
+	// runtime.UnlockOSThread()
 	return brokenFloat, ErrEnergyNotFound
 }
 
@@ -743,7 +743,7 @@ func main() {
 			} else {
 				count++
 			}
-			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch, j, len(jobGroup))
+			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch, j+1, len(jobGroup))
 		} else {
 			jobGroup[j].Status = "done"
 			jobGroup[j].Result = E0
