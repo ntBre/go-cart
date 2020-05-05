@@ -1,12 +1,16 @@
-* TODO experiment with no thread locking
-  - I think it should help to hold a thread for reading/submitting which can run into resouce problems
-    - otherwise when I sleep to wait for resources, something else will use the resources
-  - but this might not be right
-  - if anything take it off reading, probably more necessary for submit
+* Call signature:
+  - go-cart <geometry file> <# go routines>? <# derivative>?
+    
+* TODO GET RID OF DUPLICATES 1,2,1 = 2,1,1 = 112
+  - tried fixing with i <= j <= k but didnt work so reverted
+  - think more
+
+* TODO likely problem with math in third derivatives/wrong ordering
+  - I think emphasis on wrong ordering will reveal the math but maybe other way around
 
 * TODO checkpoint system - resume from incomplete run
-  - see below, would need to write fcs as we go?
-  - alternatively have to dump joblist or something
+  - +see below, would need to write fcs as we go?+
+  - +alternatively have to dump joblist or something+
   - marshal joblist into json to dump, unmarshal to restore
     - just need to add a check that job.Result != 0 in the main loop, skip if it's nonzero
   - commandline option to resume job
@@ -51,11 +55,14 @@
 * Should first derivatives in thirds be zero?
     
 * TODO input file with 
+** Alternatively config file like Judd suggested
   - geometry
   - number of concurrent jobs
   - when to write checkpoints
   - molpro job information
-** Alternatively config file like Judd suggested
+
+* TODO investigate alternate calculation schemes to minimize floating point error
+  - Library/Floats.pdf
    
 * TODO eland compatibility - for more threads
 
@@ -83,13 +90,19 @@
 
 * DONE figure out how higher order derivatives are written in output
   - tentatively done
+
+* DONE experiment with no thread locking
+  - I think it should help to hold a thread for reading/submitting which can run into resouce problems
+    - otherwise when I sleep to wait for resources, something else will use the resources
+  - but this might not be right
+  - if anything take it off reading, probably more necessary for submit
       
-* Maple benchmarking data 
+* Maple benchmarking data for second derivatives 
   - all locks, 9 workers was fastest
   - 11 workers with read locks is fastest now
   - Working hypothesis:
-    - Read locks speed it up
-    - Submit locks slow it down
+    - Read locks speed it up - not sleeping while thread locked
+    - Submit locks slow it down - sleeping while thread locked
     - Optimal workers is in the range [9,11]
   - differences of 28e-10 in many results throughout testing, sometimes twice that
 |-----------------+--------+------------+-----------+------------+--------------|

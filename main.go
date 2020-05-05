@@ -118,9 +118,9 @@ func WriteMolproIn(filename string, names []string, coords []float64) {
 }
 
 func ReadMolproOut(filename string) (float64, error) {
-	// runtime.LockOSThread()
+	runtime.LockOSThread()
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		// runtime.UnlockOSThread()
+		runtime.UnlockOSThread()
 		return brokenFloat, ErrFileNotFound
 	}
 	lines := ReadFile(filename)
@@ -136,11 +136,11 @@ func ReadMolproOut(filename string) (float64, error) {
 			// for _, f := range files {
 			// 	os.Remove(f)
 			// }
-			// runtime.UnlockOSThread()
+			runtime.UnlockOSThread()
 			return f, nil
 		}
 	}
-	// runtime.UnlockOSThread()
+	runtime.UnlockOSThread()
 	return brokenFloat, ErrEnergyNotFound
 }
 
@@ -152,17 +152,17 @@ func Basename(filename string) string {
 }
 
 func Qsubmit(filename string) int {
-	runtime.LockOSThread()
+	// runtime.LockOSThread()
 	// -f option to run qsub in foreground
 	// maybe trying to communicate with background daemon
 	//     was overloading requests and causing panic?
 	out, err := exec.Command("qsub", "-f", filename).Output()
-	runtime.UnlockOSThread()
+	// runtime.UnlockOSThread()
 	for err != nil {
-		runtime.LockOSThread()
+		// runtime.LockOSThread()
 		time.Sleep(time.Second)
 		out, err = exec.Command("qsub", filename).Output()
-		runtime.UnlockOSThread()
+		// runtime.UnlockOSThread()
 	}
 	b := Basename(string(out))
 	i, _ := strconv.Atoi(b)
@@ -556,7 +556,9 @@ func BuildJobList(names []string, coords []float64, nd int) (joblist []Job) {
 	return
 }
 
-func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup, ch chan int, jobnum, totalJobs int) {
+func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup,
+	ch chan int, jobnum, totalJobs int) {
+
 	defer wg.Done()
 	coords = Step(coords, job.Steps...)
 	molprofile := "inp/" + job.Name + ".inp"
