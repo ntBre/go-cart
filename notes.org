@@ -51,6 +51,8 @@
 	return g.Value
     }
     #+END_SRC
+    
+* TODO fix counting, probably have to use a global variable or something
 
 * Should first derivatives in thirds be zero?
     

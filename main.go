@@ -16,6 +16,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"sort"
 )
 
 const (
@@ -31,6 +32,7 @@ var (
 	ErrEnergyNotFound = errors.New("Energy not found in Molpro output")
 	ErrFileNotFound   = errors.New("Molpro output file not found")
 	delta             = 0.005
+	progress          = 1
 )
 
 func ReadFile(filename string) []string {
@@ -532,10 +534,16 @@ func BuildJobList(names []string, coords []float64, nd int) (joblist []Job) {
 			}
 		}
 	case 3:
+		// second derivatives
 		for i := 1; i <= ncoords; i++ {
 			for j := 1; j <= ncoords; j++ {
 				joblist = append(joblist, Derivative(i, j)...)
-				for k := 1; k <= ncoords; k++ {
+			}
+		}
+		// third derivatives cap out at k <= j <= i
+		for i := 1; i <= ncoords; i++ {
+			for j := 1; j <= i; j++ {
+				for k := 1; k <= j; k++ {
 					joblist = append(joblist, Derivative(i, j, k)...)
 				}
 			}
@@ -544,9 +552,13 @@ func BuildJobList(names []string, coords []float64, nd int) (joblist []Job) {
 		for i := 1; i <= ncoords; i++ {
 			for j := 1; j <= ncoords; j++ {
 				joblist = append(joblist, Derivative(i, j)...)
-				for k := 1; k <= ncoords; k++ {
+			}
+		}
+		for i := 1; i <= ncoords; i++ {
+			for j := 1; j <= i; j++ {
+				for k := 1; k <= j; k++ {
 					joblist = append(joblist, Derivative(i, j, k)...)
-					for l := 1; l <= ncoords; l++ {
+					for l := 1; l <= k; l++ {
 						joblist = append(joblist, Derivative(i, j, k, l)...)
 					}
 				}
@@ -557,7 +569,7 @@ func BuildJobList(names []string, coords []float64, nd int) (joblist []Job) {
 }
 
 func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup,
-	ch chan int, jobnum, totalJobs int) {
+	ch chan int, totalJobs int) {
 
 	defer wg.Done()
 	coords = Step(coords, job.Steps...)
@@ -588,8 +600,9 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 	}
 	job.Status = "done"
 	job.Result = energy
-	fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", jobnum, totalJobs,
-		100*float64(jobnum)/float64(totalJobs))
+	fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", progress, totalJobs,
+		100*float64(progress)/float64(totalJobs))
+	progress++
 	<-ch
 }
 
@@ -622,43 +635,43 @@ func PrintFile15(fcs [][]float64) int {
 	return len(flat)
 }
 
-func PrintFile30(fcs [][][]float64) {
+func PrintFile30(fcs []float64) {
 	natoms := len(fcs) / 3
 	N3N := natoms * 3 // from spectro manual pg 12
 	other := N3N * (N3N + 1) * (N3N + 2) / 6
 	fmt.Printf("%5d%5d\n", natoms, other)
-	flat := make([][]float64, 0)
-	flatter := make([]float64, 0)
-	for _, v := range fcs {
-		flat = append(flat, v...)
-	}
-	for _, v := range flat {
-		flatter = append(flatter, v...)
-	}
-	for i := 0; i < len(flatter); i += 3 {
-		fmt.Printf("%20.10f%20.10f%20.10f\n", flatter[i], flatter[i+1], flatter[i+2])
+	// flat := make([][]float64, 0)
+	// flatter := make([]float64, 0)
+	// for _, v := range fcs {
+	// 	flat = append(flat, v...)
+	// }
+	// for _, v := range flat {
+	// 	flatter = append(flatter, v...)
+	// }
+	for i := 0; i < len(fcs); i += 3 {
+		fmt.Printf("%20.10f%20.10f%20.10f\n", fcs[i], fcs[i+1], fcs[i+2])
 	}
 }
 
-func PrintFile40(fcs [][][][]float64) {
+func PrintFile40(fcs []float64) {
 	natoms := len(fcs) / 3
 	N3N := natoms * 3 // from spectro manual pg 12
 	other := N3N * (N3N + 1) * (N3N + 2) * (N3N + 3) / 24
 	fmt.Printf("%5d%5d\n", natoms, other)
-	flat := make([][][]float64, 0)
-	flatter := make([][]float64, 0)
-	flattest := make([]float64, 0)
-	for _, v := range fcs {
-		flat = append(flat, v...)
-	}
-	for _, v := range flat {
-		flatter = append(flatter, v...)
-	}
-	for _, v := range flatter {
-		flattest = append(flattest, v...)
-	}
-	for i := 0; i < len(flattest); i += 3 {
-		fmt.Printf("%20.10f%20.10f%20.10f\n", flattest[i], flattest[i+1], flattest[i+2])
+	// flat := make([][][]float64, 0)
+	// flatter := make([][]float64, 0)
+	// flattest := make([]float64, 0)
+	// for _, v := range fcs {
+	// 	flat = append(flat, v...)
+	// }
+	// for _, v := range flat {
+	// 	flatter = append(flatter, v...)
+	// }
+	// for _, v := range flatter {
+	// 	flattest = append(flattest, v...)
+	// }
+	for i := 0; i < len(fcs); i += 3 {
+		fmt.Printf("%20.10f%20.10f%20.10f\n", fcs[i], fcs[i+1], fcs[i+2])
 	}
 }
 
@@ -717,20 +730,17 @@ func main() {
 
 	jobGroup := BuildJobList(names, coords, nDerivative)
 
+	natoms := len(names)
+	N3N := natoms * 3 // from spectro manual pg 12
+	other3 := N3N * (N3N + 1) * (N3N + 2) / 6
+	fcs3 := make([]float64, other3)
+	other4 := N3N * (N3N + 1) * (N3N + 2) * (N3N + 3) / 24
+	fcs4 := make([]float64, other4)
+
+	// this works for second derivatives
 	fcs2 := make([][]float64, ncoords)
-	fcs3 := make([][][]float64, ncoords)
-	fcs4 := make([][][][]float64, ncoords)
 	for i := 0; i < ncoords; i++ {
 		fcs2[i] = make([]float64, ncoords)
-		fcs3[i] = make([][]float64, ncoords)
-		fcs4[i] = make([][][]float64, ncoords)
-		for j := 0; j < ncoords; j++ {
-			fcs3[i][j] = make([]float64, ncoords)
-			fcs4[i][j] = make([][]float64, ncoords)
-			for k := 0; k < ncoords; k++ {
-				fcs4[i][j][k] = make([]float64, ncoords)
-			}
-		}
 	}
 
 	ch := make(chan int, concRoutines)
@@ -745,7 +755,7 @@ func main() {
 			} else {
 				count++
 			}
-			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch, j+1, len(jobGroup))
+			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch, len(jobGroup))
 		} else {
 			jobGroup[j].Status = "done"
 			jobGroup[j].Result = E0
@@ -755,43 +765,43 @@ func main() {
 	for j, _ := range jobGroup {
 		switch len(jobGroup[j].Index) {
 		case 2:
-			x := jobGroup[j].Index[0]
-			y := jobGroup[j].Index[1]
-			x = IntAbs(x) - 1
-			y = IntAbs(y) - 1
+			x := jobGroup[j].Index[0] - 1
+			y := jobGroup[j].Index[1] - 1
 			fcs2[x][y] += jobGroup[j].Coeff * jobGroup[j].Result
 		case 3:
+			sort.Ints(jobGroup[j].Index)
 			x := jobGroup[j].Index[0]
 			y := jobGroup[j].Index[1]
 			z := jobGroup[j].Index[2]
-			x = IntAbs(x) - 1
-			y = IntAbs(y) - 1
-			z = IntAbs(z) - 1
-			fcs3[x][y][z] += jobGroup[j].Coeff * jobGroup[j].Result
+			// from spectro manual, subtract 1 for zero-indexed slice
+			// reverse x, y, z because first dimension has to change slowest
+			// x <= y <= z
+			index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 - 1
+			// fmt.Fprintln(os.Stderr, x, y, z, index)
+			fcs3[index] += jobGroup[j].Coeff * jobGroup[j].Result
 		case 4:
+			sort.Ints(jobGroup[j].Index)
 			x := jobGroup[j].Index[0]
 			y := jobGroup[j].Index[1]
 			z := jobGroup[j].Index[2]
 			w := jobGroup[j].Index[3]
-			x = IntAbs(x) - 1
-			y = IntAbs(y) - 1
-			z = IntAbs(z) - 1
-			w = IntAbs(w) - 1
-			fcs4[x][y][z][w] += jobGroup[j].Coeff * jobGroup[j].Result
+			index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24
+			fcs4[index] += jobGroup[j].Coeff * jobGroup[j].Result
 		}
 	}
 
 	for i := 0; i < ncoords; i++ {
 		for j := 0; j < ncoords; j++ {
 			fcs2[i][j] = fcs2[i][j] * angborh * angborh / (4 * delta * delta)
-			for k := 0; k < ncoords; k++ {
-				fcs3[i][j][k] = fcs3[i][j][k] * angborh * angborh * angborh / (8 * delta * delta * delta)
-				for l := 0; l < ncoords; l++ {
-					fcs4[i][j][k][l] = fcs4[i][j][k][l] * angborh * angborh * angborh * angborh / (16 * delta * delta * delta * delta)
-				}
-			}
 		}
 	}
+	for i, _ := range fcs3 {
+		fcs3[i] = fcs3[i] * angborh * angborh * angborh / (8 * delta * delta * delta)
+	}
+	for i, _ := range fcs4 {
+		fcs4[i] = fcs4[i] * angborh * angborh * angborh * angborh / (16 * delta * delta * delta * delta)
+	}
+
 	switch nDerivative {
 	case 2:
 		PrintFile15(fcs2)
