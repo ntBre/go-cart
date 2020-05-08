@@ -582,7 +582,8 @@ func BuildJobList(names []string, coords []float64, nd int) (joblist []Job) {
 }
 
 func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup,
-	ch chan int, totalJobs int, dump *GarbageHeap) {
+	ch chan int, totalJobs int, dump *GarbageHeap, fcs2 [][]float64,
+	fcs3, fcs4 []float64) {
 
 	defer wg.Done()
 	coords = Step(coords, job.Steps...)
@@ -600,8 +601,7 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 		select {
 		case <-sigChan: // either receive signal
 		case <-time.After(60 * time.Second): // or timeout after 1 minute and retry
-			// probably going to crash if this happens because After is not an os.Signal which the channel expects
-			// bad if there's a queue
+			// likely want to remove this, can I always assume signal?
 		}
 		energy, err = ReadMolproOut(outfile)
 		if err != nil {
@@ -613,10 +613,35 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 	}
 	job.Status = "done"
 	job.Result = energy
+	switch len(job.Index) {
+	case 2:
+		x := job.Index[0] - 1
+		y := job.Index[1] - 1
+		fcs2[x][y] += job.Coeff * job.Result
+	case 3:
+		sort.Ints(job.Index)
+		x := job.Index[0]
+		y := job.Index[1]
+		z := job.Index[2]
+		// from spectro manual, subtract 1 for zero-indexed slice
+		// reverse x, y, z because first dimension has to change slowest
+		// x <= y <= z
+		index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 - 1
+		// fmt.Fprintln(os.Stderr, x, y, z, index)
+		fcs3[index] += job.Coeff * job.Result
+	case 4:
+		sort.Ints(job.Index)
+		x := job.Index[0]
+		y := job.Index[1]
+		z := job.Index[2]
+		w := job.Index[3]
+		index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24 - 1
+		fcs4[index] += job.Coeff * job.Result
+	}
 	fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", progress, totalJobs,
 		100*float64(progress)/float64(totalJobs))
 	progress++
-	dump.Heap = append(dump.Heap, "inp/" + Basename(molprofile))
+	dump.Heap = append(dump.Heap, "inp/"+Basename(molprofile))
 	<-ch
 }
 
@@ -633,7 +658,7 @@ func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan floa
 		time.Sleep(time.Second)
 		energy, err = ReadMolproOut(outfile)
 	}
-	dump.Heap = append(dump.Heap, "inp/" + Basename(molprofile))
+	dump.Heap = append(dump.Heap, "inp/"+Basename(molprofile))
 	c <- energy
 }
 
@@ -651,40 +676,22 @@ func PrintFile15(fcs [][]float64) int {
 }
 
 func PrintFile30(fcs []float64) {
+	// WRONG header
 	natoms := len(fcs) / 3
 	N3N := natoms * 3 // from spectro manual pg 12
 	other := N3N * (N3N + 1) * (N3N + 2) / 6
 	fmt.Printf("%5d%5d\n", natoms, other)
-	// flat := make([][]float64, 0)
-	// flatter := make([]float64, 0)
-	// for _, v := range fcs {
-	// 	flat = append(flat, v...)
-	// }
-	// for _, v := range flat {
-	// 	flatter = append(flatter, v...)
-	// }
 	for i := 0; i < len(fcs); i += 3 {
 		fmt.Printf("%20.10f%20.10f%20.10f\n", fcs[i], fcs[i+1], fcs[i+2])
 	}
 }
 
 func PrintFile40(fcs []float64) {
+	// WRONG header
 	natoms := len(fcs) / 3
 	N3N := natoms * 3 // from spectro manual pg 12
 	other := N3N * (N3N + 1) * (N3N + 2) * (N3N + 3) / 24
 	fmt.Printf("%5d%5d\n", natoms, other)
-	// flat := make([][][]float64, 0)
-	// flatter := make([][]float64, 0)
-	// flattest := make([]float64, 0)
-	// for _, v := range fcs {
-	// 	flat = append(flat, v...)
-	// }
-	// for _, v := range flat {
-	// 	flatter = append(flatter, v...)
-	// }
-	// for _, v := range flatter {
-	// 	flattest = append(flattest, v...)
-	// }
 	for i := 0; i < len(fcs); i += 3 {
 		fmt.Printf("%20.10f%20.10f%20.10f\n", fcs[i], fcs[i+1], fcs[i+2])
 	}
@@ -776,41 +783,43 @@ func main() {
 			} else {
 				count++
 			}
-			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch, len(jobGroup), &dump)
+			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch,
+				len(jobGroup), &dump, fcs2, fcs3, fcs4)
 		} else {
 			jobGroup[j].Status = "done"
 			jobGroup[j].Result = E0
+			// copy and pasted from QueueAndSubmit
+			// ideally I would like to handle this in one place
+			switch len(jobGroup[j].Index) {
+			case 2:
+				x := jobGroup[j].Index[0] - 1
+				y := jobGroup[j].Index[1] - 1
+				fcs2[x][y] += jobGroup[j].Coeff * jobGroup[j].Result
+			case 3:
+				sort.Ints(jobGroup[j].Index)
+				x := jobGroup[j].Index[0]
+				y := jobGroup[j].Index[1]
+				z := jobGroup[j].Index[2]
+				index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 - 1
+				fcs3[index] += jobGroup[j].Coeff * jobGroup[j].Result
+			case 4:
+				sort.Ints(jobGroup[j].Index)
+				x := jobGroup[j].Index[0]
+				y := jobGroup[j].Index[1]
+				z := jobGroup[j].Index[2]
+				w := jobGroup[j].Index[3]
+				index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24 - 1
+				fcs4[index] += jobGroup[j].Coeff * jobGroup[j].Result
+			}
+			fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", progress,
+				len(jobGroup), 100*float64(progress)/float64(len(jobGroup)))
 			progress++
 		}
 	}
 	wg.Wait()
-	for j, _ := range jobGroup {
-		switch len(jobGroup[j].Index) {
-		case 2:
-			x := jobGroup[j].Index[0] - 1
-			y := jobGroup[j].Index[1] - 1
-			fcs2[x][y] += jobGroup[j].Coeff * jobGroup[j].Result
-		case 3:
-			sort.Ints(jobGroup[j].Index)
-			x := jobGroup[j].Index[0]
-			y := jobGroup[j].Index[1]
-			z := jobGroup[j].Index[2]
-			// from spectro manual, subtract 1 for zero-indexed slice
-			// reverse x, y, z because first dimension has to change slowest
-			// x <= y <= z
-			index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 - 1
-			// fmt.Fprintln(os.Stderr, x, y, z, index)
-			fcs3[index] += jobGroup[j].Coeff * jobGroup[j].Result
-		case 4:
-			sort.Ints(jobGroup[j].Index)
-			x := jobGroup[j].Index[0]
-			y := jobGroup[j].Index[1]
-			z := jobGroup[j].Index[2]
-			w := jobGroup[j].Index[3]
-			index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24 - 1
-			fcs4[index] += jobGroup[j].Coeff * jobGroup[j].Result
-		}
-	}
+	// for j, _ := range jobGroup {
+	// 	}
+	// }
 
 	for i := 0; i < ncoords; i++ {
 		for j := 0; j < ncoords; j++ {

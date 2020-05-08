@@ -2,6 +2,10 @@
   - go-cart <geometry file> <# go routines>? <# derivative>?
 
 * TODO check for already calculated 2nd derivatives in 4ths
+  - the idea below doesnt really work anymore since I don't collect them
+    into fcs at the end
+    - now just check if the value is in the passed fcs2 and if so skip submission
+    - if it's not there just go ahead and run I guess
   - I think the ordering in BuildJobList is conducive for this already
     - just see if fcs[i,j] exists and use that as Job.Result in 4ths
       - This is the problem; not saving to fcs until all jobs are done
@@ -28,7 +32,8 @@
 	Value float64
     }
 
-    func (g Give) Result(_ [][]float64) float64 {
+    func (g Give) Result(_ interface{}) float64 {
+	// take unnamed interface just to keep call signature
 	return g.Value
     }
     #+END_SRC
