@@ -192,19 +192,32 @@ func MakePBSHead() []string {
 		"date"}
 }
 
-func MakePBSFoot(count int) []string {
+type GarbageHeap struct {
+	Heap []string // list of basenames
+}
+
+func (g *GarbageHeap) Dump() []string {
+	dump := make([]string, 0)
+	for _, v := range g.Heap {
+		dump = append(dump, "rm "+v+"*")
+	}
+	g.Heap = []string{}
+	return dump
+}
+
+func MakePBSFoot(count int, dump *GarbageHeap) []string {
 	num := strconv.Itoa(count)
 	return []string{"ssh -t maple pkill -" + num + " " + progName,
-		"rm -rf $TMPDIR"}
+		strings.Join(dump.Dump(), "\n"), "rm -rf $TMPDIR"}
 }
 
-func MakePBS(filename string, count int) []string {
+func MakePBS(filename string, count int, dump *GarbageHeap) []string {
 	body := []string{"molpro -t 1 " + filename}
-	return MakeInput(MakePBSHead(), MakePBSFoot(count), body)
+	return MakeInput(MakePBSHead(), MakePBSFoot(count, dump), body)
 }
 
-func WritePBS(pbsfile, molprofile string, count int) {
-	lines := MakePBS(molprofile, count)
+func WritePBS(pbsfile, molprofile string, count int, dump *GarbageHeap) {
+	lines := MakePBS(molprofile, count, dump)
 	writelines := strings.Join(lines, "\n")
 	err := ioutil.WriteFile(pbsfile, []byte(writelines), 0755)
 	if err != nil {
@@ -569,7 +582,7 @@ func BuildJobList(names []string, coords []float64, nd int) (joblist []Job) {
 }
 
 func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup,
-	ch chan int, totalJobs int) {
+	ch chan int, totalJobs int, dump *GarbageHeap) {
 
 	defer wg.Done()
 	coords = Step(coords, job.Steps...)
@@ -577,7 +590,7 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 	pbsfile := "inp/" + job.Name + ".pbs"
 	outfile := "inp/" + job.Name + ".out"
 	WriteMolproIn(molprofile, names, coords)
-	WritePBS(pbsfile, molprofile, job.Count)
+	WritePBS(pbsfile, molprofile, job.Count, dump)
 	job.Number = Qsubmit(pbsfile)
 	energy, err := ReadMolproOut(outfile)
 	for err != nil {
@@ -603,22 +616,24 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 	fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", progress, totalJobs,
 		100*float64(progress)/float64(totalJobs))
 	progress++
+	dump.Heap = append(dump.Heap, "inp/" + Basename(molprofile))
 	<-ch
 }
 
-func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan float64) {
+func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan float64, dump *GarbageHeap) {
 	defer wg.Done()
 	molprofile := "inp/ref.inp"
 	pbsfile := "inp/ref.pbs"
 	outfile := "inp/ref.out"
 	WriteMolproIn(molprofile, names, coords)
-	WritePBS(pbsfile, molprofile, 35)
+	WritePBS(pbsfile, molprofile, 35, dump)
 	Qsubmit(pbsfile)
 	energy, err := ReadMolproOut(outfile)
 	for err != nil {
 		time.Sleep(time.Second)
 		energy, err = ReadMolproOut(outfile)
 	}
+	dump.Heap = append(dump.Heap, "inp/" + Basename(molprofile))
 	c <- energy
 }
 
@@ -691,6 +706,7 @@ func main() {
 		coords       []float64
 		ncoords      int
 		wg           sync.WaitGroup
+		dump         GarbageHeap
 	)
 
 	switch len(os.Args) {
@@ -723,7 +739,7 @@ func main() {
 	// run reference job
 	c := make(chan float64)
 	wg.Add(1)
-	go RefEnergy(names, coords, &wg, c)
+	go RefEnergy(names, coords, &wg, c, &dump)
 	E0 := <-c
 	wg.Wait()
 	close(c)
@@ -746,6 +762,11 @@ func main() {
 	ch := make(chan int, concRoutines)
 	count := RTMIN // SIGRTMIN
 	for j, _ := range jobGroup {
+		// if len(Index) == 4 && len(steps) == 2
+		// job.Promise = Fetch(Index)
+		// else in QueueAndWait job.Promise = Give(Result)
+		// ...
+		// job.Promise.Result(fcs) below where currently .Result
 		if jobGroup[j].Name != "E0" {
 			wg.Add(1)
 			ch <- 1
@@ -755,10 +776,11 @@ func main() {
 			} else {
 				count++
 			}
-			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch, len(jobGroup))
+			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch, len(jobGroup), &dump)
 		} else {
 			jobGroup[j].Status = "done"
 			jobGroup[j].Result = E0
+			progress++
 		}
 	}
 	wg.Wait()

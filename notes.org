@@ -1,22 +1,5 @@
 * Call signature:
   - go-cart <geometry file> <# go routines>? <# derivative>?
-    
-* TODO GET RID OF DUPLICATES 1,2,1 = 2,1,1 = 112
-  - done in thirds, but waiting to confirm fourths
-  - tried fixing with i <= j <= k but didnt work so reverted
-  - think more
-
-* TODO Delete files after reading
-  - this is back to not working since it was making too many syscalls
-  - try keeping garbage list and tacking some on to every pbs job
-    - hopefully deletes on compute node, saving me resources on head
-
-* TODO checkpoint system - resume from incomplete run
-  - +see below, would need to write fcs as we go?+
-  - +alternatively have to dump joblist or something+
-  - marshal joblist into json to dump, unmarshal to restore
-    - just need to add a check that job.Result != 0 in the main loop, skip if it's nonzero
-  - commandline option to resume job
 
 * TODO check for already calculated 2nd derivatives in 4ths
   - I think the ordering in BuildJobList is conducive for this already
@@ -49,10 +32,27 @@
 	return g.Value
     }
     #+END_SRC
+
+* TODO move force constant calculation into goroutine
+  - have to pass fc arrays as argument
+  - might get rid of job struct altogether, submit jobs as they are built?
+  - pop job off to submit it?
+    
+* TODO add mopac i/o
+
+* TODO add slurm i/o
+
+* TODO checkpoint system - resume from incomplete run
+  - +see below, would need to write fcs as we go?+
+  - +alternatively have to dump joblist or something+
+  - marshal joblist into json to dump, unmarshal to restore
+    - just need to add a check that job.Result != 0 in the main loop, skip if it's nonzero
+  - commandline option to resume job
   
 * TODO big problems if jobs take more than a minute in my select statement
-    
-* TODO input file with 
+  
+* TODO input file with
+** follow Psi4 input style
 ** Alternatively config file like Judd suggested
   - geometry
   - number of concurrent jobs
@@ -79,6 +79,16 @@
   - two signals gives 900 unique combos compared to 30 of one
 
 * zero values below some threshold - hold off for now, see later 
+
+* DONE Delete files after reading
+  - this is back to not working since it was making too many syscalls
+  - try keeping garbage list and tacking some on to every pbs job
+    - hopefully deletes on compute node, saving me resources on head
+    
+* DONE GET RID OF DUPLICATES 1,2,1 = 2,1,1 = 112
+  - done in thirds and fourths
+  - tried fixing with i <= j <= k but didnt work so reverted
+  - think more
 
 * DONE likely problem with math in third derivatives/wrong ordering
   - I think emphasis on wrong ordering will reveal the math but maybe other way around

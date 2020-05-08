@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"strconv"
 )
 
 var (
@@ -155,8 +156,10 @@ func TestMakePBS(t *testing.T) {
 		"date",
 		"molpro -t 1 molpro.in",
 		"ssh -t maple pkill -35 go-cart",
+		"rm test1*\nrm test2*\nrm test3*",
 		"rm -rf $TMPDIR"}
-	got := MakePBS(filename, 35)
+	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
+	got := MakePBS(filename, 35, &tdump)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %#v, wanted %#v", got, want)
 	}
@@ -165,7 +168,8 @@ func TestMakePBS(t *testing.T) {
 func TestWritePBS(t *testing.T) {
 	// this is a terrible test after it has been run once successfully
 	filename := "testfiles/molpro.pbs"
-	WritePBS(filename, "molpro.in", 35)
+	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
+	WritePBS(filename, "molpro.in", 35, &tdump)
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		t.Errorf("%s does not exist", filename)
 	}
@@ -303,4 +307,25 @@ func TestCentral(t *testing.T) {
 			t.Errorf("got %s, wanted %s\n", got, want)
 		}
 	})
+}
+
+func TestDump(t *testing.T) {
+	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
+	got := tdump.Dump()
+	want := []string{"rm test1*", "rm test2*", "rm test3*"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, wanted %v", got, want)
+	}
+}
+
+func TestMakePBSFoot(t *testing.T) {
+	num := strconv.Itoa(5)
+	want := []string{"ssh -t maple pkill -" + num + " " + "go-cart",
+		"rm test1*\nrm test2*\nrm test3*",
+		"rm -rf $TMPDIR"}
+	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
+	got := MakePBSFoot(5, &tdump)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %#v, wanted %#v", got, want)
+	}
 }
