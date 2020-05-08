@@ -2,11 +2,14 @@
   - go-cart <geometry file> <# go routines>? <# derivative>?
     
 * TODO GET RID OF DUPLICATES 1,2,1 = 2,1,1 = 112
+  - done in thirds, but waiting to confirm fourths
   - tried fixing with i <= j <= k but didnt work so reverted
   - think more
 
-* TODO likely problem with math in third derivatives/wrong ordering
-  - I think emphasis on wrong ordering will reveal the math but maybe other way around
+* TODO Delete files after reading
+  - this is back to not working since it was making too many syscalls
+  - try keeping garbage list and tacking some on to every pbs job
+    - hopefully deletes on compute node, saving me resources on head
 
 * TODO checkpoint system - resume from incomplete run
   - +see below, would need to write fcs as we go?+
@@ -14,11 +17,6 @@
   - marshal joblist into json to dump, unmarshal to restore
     - just need to add a check that job.Result != 0 in the main loop, skip if it's nonzero
   - commandline option to resume job
-
-* TODO Delete files after reading
-  - this is back to not working since it was making too many syscalls
-  - try keeping garbage list and tacking some on to every pbs job
-    - hopefully deletes on compute node, saving me resources on head
 
 * TODO check for already calculated 2nd derivatives in 4ths
   - I think the ordering in BuildJobList is conducive for this already
@@ -51,10 +49,8 @@
 	return g.Value
     }
     #+END_SRC
-    
-* TODO fix counting, probably have to use a global variable or something
-
-* Should first derivatives in thirds be zero?
+  
+* TODO big problems if jobs take more than a minute in my select statement
     
 * TODO input file with 
 ** Alternatively config file like Judd suggested
@@ -67,6 +63,8 @@
   - Library/Floats.pdf
    
 * TODO eland compatibility - for more threads
+
+* Should first derivatives in thirds be zero?
 
 * Should probably be using the same seed for the hashnames, look into this
   - right now just hoping they arent randomly the same?
@@ -81,6 +79,11 @@
   - two signals gives 900 unique combos compared to 30 of one
 
 * zero values below some threshold - hold off for now, see later 
+
+* DONE likely problem with math in third derivatives/wrong ordering
+  - I think emphasis on wrong ordering will reveal the math but maybe other way around
+    
+* DONE fix counting, probably have to use a global variable or something
 
 * DONE option for different derivative levels
 ** DONE test this

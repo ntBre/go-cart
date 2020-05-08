@@ -11,12 +11,12 @@ import (
 	"path"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
-	"sort"
 )
 
 const (
@@ -785,7 +785,7 @@ func main() {
 			y := jobGroup[j].Index[1]
 			z := jobGroup[j].Index[2]
 			w := jobGroup[j].Index[3]
-			index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24
+			index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24 - 1
 			fcs4[index] += jobGroup[j].Coeff * jobGroup[j].Result
 		}
 	}
