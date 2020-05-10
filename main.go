@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/maphash"
 	"io/ioutil"
+	"math"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -20,12 +21,11 @@ import (
 )
 
 const (
-	energyLine  = "energy="
-	brokenFloat = 999.999
-	angborh     = 0.529177249
-	progName    = "go-cart"
-	RTMIN       = 35
-	RTMAX       = 64
+	energyLine = "energy="
+	angborh    = 0.529177249
+	progName   = "go-cart"
+	RTMIN      = 35
+	RTMAX      = 64
 )
 
 var (
@@ -33,14 +33,14 @@ var (
 	ErrFileNotFound   = errors.New("Molpro output file not found")
 	delta             = 0.005
 	progress          = 1
+	brokenFloat       = math.NaN()
+	// may need to adjust this if jobs can reasonably take longer than a minute
+	timeBeforeRetry = time.Second * 60
 )
 
-func ReadFile(filename string) []string {
+func ReadFile(filename string) ([]string, error) {
 	lines, err := ioutil.ReadFile(filename)
-	if err != nil {
-		panic(err)
-	}
-	return strings.Split(strings.TrimSpace(string(lines)), "\n")
+	return strings.Split(strings.TrimSpace(string(lines)), "\n"), err
 }
 
 func SplitLine(line string) []string {
@@ -52,7 +52,7 @@ func SplitLine(line string) []string {
 
 func ReadInputXYZ(filename string) ([]string, []float64) {
 	// skip the natoms and comment line in xyz file
-	split := ReadFile(filename)
+	split, _ := ReadFile(filename)
 	names := make([]string, 0)
 	coords := make([]float64, 0)
 	for _, v := range split[2:] {
@@ -125,21 +125,28 @@ func ReadMolproOut(filename string) (float64, error) {
 		runtime.UnlockOSThread()
 		return brokenFloat, ErrFileNotFound
 	}
-	lines := ReadFile(filename)
+	// keeps giving error file not found
+	// even though I just checked if the file exists
+	// so instead of panic in ReadFile, just return the error
+	// and disregard here
+	lines, _ := ReadFile(filename)
 	for _, line := range lines {
 		if strings.Contains(line, energyLine) {
 			split := SplitLine(line)
-			f, err := strconv.ParseFloat(split[len(split)-1], 64)
-			if err != nil {
-				panic(err)
+			for i, _ := range split {
+				if strings.Contains(split[i], energyLine) {
+					// take the thing right after search term
+					// not the last entry in the line
+					if i+1 >= len(split) {
+						runtime.UnlockOSThread()
+						return brokenFloat, ErrEnergyNotFound
+					}
+					f, err := strconv.ParseFloat(split[i+1], 64)
+					runtime.UnlockOSThread()
+					return f, err
+					// return err here to catch problem with conversion
+				}
 			}
-			// dont delete, too many syscalls
-			// files, _ := filepath.Glob("inp/" + Basename(filename) + "*")
-			// for _, f := range files {
-			// 	os.Remove(f)
-			// }
-			runtime.UnlockOSThread()
-			return f, nil
 		}
 	}
 	runtime.UnlockOSThread()
@@ -154,17 +161,11 @@ func Basename(filename string) string {
 }
 
 func Qsubmit(filename string) int {
-	// runtime.LockOSThread()
 	// -f option to run qsub in foreground
-	// maybe trying to communicate with background daemon
-	//     was overloading requests and causing panic?
 	out, err := exec.Command("qsub", "-f", filename).Output()
-	// runtime.UnlockOSThread()
 	for err != nil {
-		// runtime.LockOSThread()
 		time.Sleep(time.Second)
 		out, err = exec.Command("qsub", filename).Output()
-		// runtime.UnlockOSThread()
 	}
 	b := Basename(string(out))
 	i, _ := strconv.Atoi(b)
@@ -537,82 +538,68 @@ func HashName() string {
 	return "job" + strconv.FormatUint(h.Sum64(), 16)
 }
 
-func BuildJobList(names []string, coords []float64, nd int) (joblist []Job) {
-	ncoords := len(coords)
-	switch nd {
-	case 2:
-		for i := 1; i <= ncoords; i++ {
-			for j := 1; j <= ncoords; j++ {
-				joblist = append(joblist, Derivative(i, j)...)
-			}
-		}
-	case 3:
-		// second derivatives
-		for i := 1; i <= ncoords; i++ {
-			for j := 1; j <= ncoords; j++ {
-				joblist = append(joblist, Derivative(i, j)...)
-			}
-		}
-		// third derivatives cap out at k <= j <= i
-		for i := 1; i <= ncoords; i++ {
-			for j := 1; j <= i; j++ {
-				for k := 1; k <= j; k++ {
-					joblist = append(joblist, Derivative(i, j, k)...)
-				}
-			}
-		}
-	case 4:
-		for i := 1; i <= ncoords; i++ {
-			for j := 1; j <= ncoords; j++ {
-				joblist = append(joblist, Derivative(i, j)...)
-			}
-		}
-		for i := 1; i <= ncoords; i++ {
-			for j := 1; j <= i; j++ {
-				for k := 1; k <= j; k++ {
-					joblist = append(joblist, Derivative(i, j, k)...)
-					for l := 1; l <= k; l++ {
-						joblist = append(joblist, Derivative(i, j, k, l)...)
-					}
-				}
-			}
-		}
-	}
-	return
-}
-
-func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup,
+func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	ch chan int, totalJobs int, dump *GarbageHeap, fcs2 [][]float64,
-	fcs3, fcs4 []float64) {
+	fcs3, fcs4 []float64, E0 float64, E2D [][]float64) {
 
 	defer wg.Done()
-	coords = Step(coords, job.Steps...)
-	molprofile := "inp/" + job.Name + ".inp"
-	pbsfile := "inp/" + job.Name + ".pbs"
-	outfile := "inp/" + job.Name + ".out"
-	WriteMolproIn(molprofile, names, coords)
-	WritePBS(pbsfile, molprofile, job.Count, dump)
-	job.Number = Qsubmit(pbsfile)
-	energy, err := ReadMolproOut(outfile)
-	for err != nil {
-		sigChan := make(chan os.Signal, 1)
-		sigWant := os.Signal(syscall.Signal(job.Count))
-		signal.Notify(sigChan, sigWant)
-		select {
-		case <-sigChan: // either receive signal
-		case <-time.After(60 * time.Second): // or timeout after 1 minute and retry
-			// likely want to remove this, can I always assume signal?
+	switch {
+	case job.Name == "E0":
+		job.Status = "done"
+		job.Result = E0
+		// add case for seconds in fourth if can hold seconds array
+		// actually dont check index length because I want to use on seconds as well
+		// case len(job.Index) == 4 && len(job.Step) == 2:
+		// x,y are sorted, absolute value steps
+		// if E2D[x][y] != 0 {
+		// job.Status = "done"
+		// job.Result = E2D[x][y]
+		// } else {goto default}
+	case len(job.Steps) == 2:
+		x := IntAbs(job.Steps[0]) - 1
+		y := IntAbs(job.Steps[1]) - 1
+		if x > y {
+			temp := x
+			x = y
+			y = temp
 		}
-		energy, err = ReadMolproOut(outfile)
+		if E2D[x][y] != 0 {
+			job.Status = "done"
+			job.Result = E2D[x][y]
+			break
+		} 
+		fallthrough
+	default:
+		coords = Step(coords, job.Steps...)
+		molprofile := "inp/" + job.Name + ".inp"
+		pbsfile := "inp/" + job.Name + ".pbs"
+		outfile := "inp/" + job.Name + ".out"
+		WriteMolproIn(molprofile, names, coords)
+		WritePBS(pbsfile, molprofile, job.Count, dump)
+		job.Number = Qsubmit(pbsfile)
+		energy, err := ReadMolproOut(outfile)
+		for err != nil {
+			sigChan := make(chan os.Signal, 1)
+			sigWant := os.Signal(syscall.Signal(job.Count))
+			signal.Notify(sigChan, sigWant)
+			select {
+			// either receive signal
+			case <-sigChan:
+			// or timeout after 1 minute and retry
+			case <-time.After(timeBeforeRetry):
+			}
+			energy, err = ReadMolproOut(outfile)
+			if err != nil {
+				Qsubmit(pbsfile)
+			}
+		}
 		if err != nil {
-			Qsubmit(pbsfile)
+			panic(err)
 		}
+		job.Status = "done"
+		job.Result = energy
+		dump.Heap = append(dump.Heap, "inp/"+Basename(molprofile))
 	}
-	if err != nil {
-		panic(err)
-	}
-	job.Status = "done"
-	job.Result = energy
 	switch len(job.Index) {
 	case 2:
 		x := job.Index[0] - 1
@@ -641,7 +628,6 @@ func QueueAndWait(job *Job, names []string, coords []float64, wg *sync.WaitGroup
 	fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", progress, totalJobs,
 		100*float64(progress)/float64(totalJobs))
 	progress++
-	dump.Heap = append(dump.Heap, "inp/"+Basename(molprofile))
 	<-ch
 }
 
@@ -662,8 +648,7 @@ func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan floa
 	c <- energy
 }
 
-func PrintFile15(fcs [][]float64) int {
-	natoms := len(fcs) / 3
+func PrintFile15(fcs [][]float64, natoms int) int {
 	fmt.Printf("%5d%5d\n", natoms, 6*natoms) // still not sure why this is just times 6
 	flat := make([]float64, 0)
 	for _, v := range fcs {
@@ -675,22 +660,14 @@ func PrintFile15(fcs [][]float64) int {
 	return len(flat)
 }
 
-func PrintFile30(fcs []float64) {
-	// WRONG header
-	natoms := len(fcs) / 3
-	N3N := natoms * 3 // from spectro manual pg 12
-	other := N3N * (N3N + 1) * (N3N + 2) / 6
+func PrintFile30(fcs []float64, natoms, other int) {
 	fmt.Printf("%5d%5d\n", natoms, other)
 	for i := 0; i < len(fcs); i += 3 {
 		fmt.Printf("%20.10f%20.10f%20.10f\n", fcs[i], fcs[i+1], fcs[i+2])
 	}
 }
 
-func PrintFile40(fcs []float64) {
-	// WRONG header
-	natoms := len(fcs) / 3
-	N3N := natoms * 3 // from spectro manual pg 12
-	other := N3N * (N3N + 1) * (N3N + 2) * (N3N + 3) / 24
+func PrintFile40(fcs []float64, natoms, other int) {
 	fmt.Printf("%5d%5d\n", natoms, other)
 	for i := 0; i < len(fcs); i += 3 {
 		fmt.Printf("%20.10f%20.10f%20.10f\n", fcs[i], fcs[i+1], fcs[i+2])
@@ -702,6 +679,24 @@ func IntAbs(n int) int {
 		return -1 * n
 	}
 	return n
+}
+
+func Drain(jobs []Job, names []string, coords []float64, wg *sync.WaitGroup,
+	ch chan int, totalJobs int, dump *GarbageHeap, fcs2 [][]float64,
+	fcs3, fcs4 []float64, E0 float64, count int, E2D [][]float64) {
+
+	for job, _ := range jobs {
+		wg.Add(1)
+		ch <- 1
+		jobs[job].Count = count
+		if count == RTMAX {
+			count = RTMIN
+		} else {
+			count++
+		}
+		go QueueAndWait(jobs[job], names, coords, wg, ch, totalJobs,
+			dump, fcs2, fcs3, fcs4, E0, E2D)
+	}
 }
 
 func main() {
@@ -751,8 +746,16 @@ func main() {
 	wg.Wait()
 	close(c)
 
-	jobGroup := BuildJobList(names, coords, nDerivative)
+	// refactor so jobs are built and submitted at the same time
+	// jobGroup := BuildJobList(names, coords, nDerivative)
+	// func BuildJobList(names []string, coords []float64, nd int) (joblist []Job) {
 
+	fcs2 := make([][]float64, ncoords)
+	E2D := make([][]float64, ncoords)
+	for i := 0; i < ncoords; i++ {
+		fcs2[i] = make([]float64, ncoords)
+		E2D[i] = make([]float64, ncoords)
+	}
 	natoms := len(names)
 	N3N := natoms * 3 // from spectro manual pg 12
 	other3 := N3N * (N3N + 1) * (N3N + 2) / 6
@@ -760,67 +763,60 @@ func main() {
 	other4 := N3N * (N3N + 1) * (N3N + 2) * (N3N + 3) / 24
 	fcs4 := make([]float64, other4)
 
-	// this works for second derivatives
-	fcs2 := make([][]float64, ncoords)
-	for i := 0; i < ncoords; i++ {
-		fcs2[i] = make([]float64, ncoords)
-	}
-
 	ch := make(chan int, concRoutines)
 	count := RTMIN // SIGRTMIN
-	for j, _ := range jobGroup {
-		// if len(Index) == 4 && len(steps) == 2
-		// job.Promise = Fetch(Index)
-		// else in QueueAndWait job.Promise = Give(Result)
-		// ...
-		// job.Promise.Result(fcs) below where currently .Result
-		if jobGroup[j].Name != "E0" {
-			wg.Add(1)
-			ch <- 1
-			jobGroup[j].Count = count
-			if count == RTMAX {
-				count = RTMIN
-			} else {
-				count++
+	switch nDerivative {
+	case 2:
+		// 3 jobs for diagonal + 4 jobs for off diagonal
+		totalJobs := ncoords*3 + (ncoords*ncoords-ncoords)*4
+		for i := 1; i <= ncoords; i++ {
+			for j := 1; j <= ncoords; j++ {
+				jobs := Derivative(i, j)
+				Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, count, E2D)
 			}
-			go QueueAndWait(&jobGroup[j], names, coords, &wg, ch,
-				len(jobGroup), &dump, fcs2, fcs3, fcs4)
-		} else {
-			jobGroup[j].Status = "done"
-			jobGroup[j].Result = E0
-			// copy and pasted from QueueAndSubmit
-			// ideally I would like to handle this in one place
-			switch len(jobGroup[j].Index) {
-			case 2:
-				x := jobGroup[j].Index[0] - 1
-				y := jobGroup[j].Index[1] - 1
-				fcs2[x][y] += jobGroup[j].Coeff * jobGroup[j].Result
-			case 3:
-				sort.Ints(jobGroup[j].Index)
-				x := jobGroup[j].Index[0]
-				y := jobGroup[j].Index[1]
-				z := jobGroup[j].Index[2]
-				index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 - 1
-				fcs3[index] += jobGroup[j].Coeff * jobGroup[j].Result
-			case 4:
-				sort.Ints(jobGroup[j].Index)
-				x := jobGroup[j].Index[0]
-				y := jobGroup[j].Index[1]
-				z := jobGroup[j].Index[2]
-				w := jobGroup[j].Index[3]
-				index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24 - 1
-				fcs4[index] += jobGroup[j].Coeff * jobGroup[j].Result
+		}
+	case 3:
+		// third derivatives cap out at k <= j <= i
+		// need to add third derivative factor here instead of 1140
+		// totalJobs := ncoords*3 + (ncoords*ncoords-ncoords)*4 + 1140
+		totalJobs := 1455
+		for i := 1; i <= ncoords; i++ {
+			for j := 1; j <= ncoords; j++ {
+				jobs := Derivative(i, j)
+				Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, count, E2D)
+				if j <= i {
+					for k := 1; k <= j; k++ {
+						jobs := Derivative(i, j, k)
+						Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, count, E2D)
+					}
+				}
 			}
-			fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", progress,
-				len(jobGroup), 100*float64(progress)/float64(len(jobGroup)))
-			progress++
+		}
+	case 4:
+		// add fourth derivative factor instead of 5000
+		// totalJobs := ncoords*3 + (ncoords*ncoords-ncoords)*4 + 1140 + 5000
+		totalJobs := 7440
+		for i := 1; i <= ncoords; i++ {
+			for j := 1; j <= ncoords; j++ {
+				jobs := Derivative(i, j)
+				Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, count, E2D)
+				if j <= i {
+					for k := 1; k <= j; k++ {
+						jobs := Derivative(i, j, k)
+						Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, count, E2D)
+						for l := 1; l <= k; l++ {
+							jobs := Derivative(i, j, k, l)
+							Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, count, E2D)
+						}
+					}
+				}
+			}
 		}
 	}
-	wg.Wait()
-	// for j, _ := range jobGroup {
-	// 	}
-	// }
 
+	wg.Wait()
+
+	// Unit conversion and denominator handling
 	for i := 0; i < ncoords; i++ {
 		for j := 0; j < ncoords; j++ {
 			fcs2[i][j] = fcs2[i][j] * angborh * angborh / (4 * delta * delta)
@@ -835,13 +831,13 @@ func main() {
 
 	switch nDerivative {
 	case 2:
-		PrintFile15(fcs2)
+		PrintFile15(fcs2, natoms)
 	case 3:
-		PrintFile15(fcs2)
-		PrintFile30(fcs3)
+		PrintFile15(fcs2, natoms)
+		PrintFile30(fcs3, natoms, other3)
 	case 4:
-		PrintFile15(fcs2)
-		PrintFile30(fcs3)
-		PrintFile40(fcs4)
+		PrintFile15(fcs2, natoms)
+		PrintFile30(fcs3, natoms, other3)
+		PrintFile40(fcs4, natoms, other4)
 	}
 }

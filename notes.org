@@ -1,51 +1,25 @@
 * Call signature:
   - go-cart <geometry file> <# go routines>? <# derivative>?
+    
+* TODO switch cases to nested ifs
 
 * TODO check for already calculated 2nd derivatives in 4ths
-  - the idea below doesnt really work anymore since I don't collect them
-    into fcs at the end
-    - now just check if the value is in the passed fcs2 and if so skip submission
-    - if it's not there just go ahead and run I guess
-  - I think the ordering in BuildJobList is conducive for this already
-    - just see if fcs[i,j] exists and use that as Job.Result in 4ths
-      - This is the problem; not saving to fcs until all jobs are done
-  - every case but all different uses 2nds so this should be real savings
-  - job.Result = &fcs[i,j] ? 
-    - doesn't work without making Result *float64
-    - and then that doesnt work with assigning numbers to it
-  - Promise struct with indices of fcs[i,j] to be read at end
-    #+BEGIN_SRC go
-    type Promise interface {
-	Result([][]float64) float64
-    }
+  - pass around 2DE
+  - build array of second derivatives - use this for fourths and duplicate seconds
+    - duplicate if sorted indices already in 2DE
 
-    type Fetch struct {
-	Index [2]int
-    }
-
-    func (f Fetch) Result(src [][]float64) float64 {
-	// fetch the result from src slice
-	return src[f.Index[0]][f.Index[1]]
-    }
-
-    type Give struct {
-	Value float64
-    }
-
-    func (g Give) Result(_ interface{}) float64 {
-	// take unnamed interface just to keep call signature
-	return g.Value
-    }
-    #+END_SRC
-
-* TODO move force constant calculation into goroutine
+* DONE move force constant calculation into goroutine
   - have to pass fc arrays as argument
+    
+* TODO reevaluate job struct and job list -> maybe a stack of jobs
   - might get rid of job struct altogether, submit jobs as they are built?
   - pop job off to submit it?
     
 * TODO add mopac i/o
 
 * TODO add slurm i/o
+   
+* TODO eland compatibility - for more threads
 
 * TODO checkpoint system - resume from incomplete run
   - +see below, would need to write fcs as we go?+
@@ -55,6 +29,8 @@
   - commandline option to resume job
   
 * TODO big problems if jobs take more than a minute in my select statement
+  - tried taking out timeout but it froze indefinitely
+  - printing showed it was timing out constantly
   
 * TODO input file with
 ** follow Psi4 input style
@@ -66,8 +42,6 @@
 
 * TODO investigate alternate calculation schemes to minimize floating point error
   - Library/Floats.pdf
-   
-* TODO eland compatibility - for more threads
 
 * Should first derivatives in thirds be zero?
 

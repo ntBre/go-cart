@@ -116,7 +116,7 @@ func TestReadMolproOut(t *testing.T) {
 		want := brokenFloat
 		if err == nil {
 			t.Errorf("wanted an error, but didn't get one")
-		} else if got != want {
+		} else if !math.IsNaN(got) {
 			t.Errorf("got %f, wanted %f", got, want)
 		}
 	})
@@ -127,7 +127,7 @@ func TestReadMolproOut(t *testing.T) {
 		want := brokenFloat
 		if err == nil {
 			t.Errorf("wanted an error, but didn't get one")
-		} else if got != want {
+		} else if !math.IsNaN(got) {
 			t.Errorf("got %f, wanted %f", got, want)
 		}
 	})
