@@ -1,44 +1,27 @@
 * Call signature:
-  - go-cart <geometry file> <# go routines>? <# derivative>?
+  - go-cart <geometry file> <# go routines>? <# derivative>? <1 for slurm>?
+
+* TODO try on benzene on eland
+** DONE add slurm i/o
+*** DONE add switch between pbs and slurm submission
+    - some kind of interface? 
+** TODO checkpoint system - resume from incomplete run
+   - dump fc arrays and the index of the last job - that's all the info I have and need
+** TODO big problems if jobs take more than a minute in my select statement
+   - tried taking out timeout but it froze indefinitely
+   - printing showed it was timing out constantly
+** TODO input file with
+   - geometry
+   - number of concurrent jobs
+   - when to write checkpoints
+   - molpro job information - mainly basis set
+   - follow Psi4 input style
     
 * TODO switch cases to nested ifs
 
-* TODO check for already calculated 2nd derivatives in 4ths
-  - pass around 2DE
-  - build array of second derivatives - use this for fourths and duplicate seconds
-    - duplicate if sorted indices already in 2DE
-
-* DONE move force constant calculation into goroutine
-  - have to pass fc arrays as argument
-    
-* TODO reevaluate job struct and job list -> maybe a stack of jobs
-  - might get rid of job struct altogether, submit jobs as they are built?
-  - pop job off to submit it?
-    
 * TODO add mopac i/o
-
-* TODO add slurm i/o
-   
-* TODO eland compatibility - for more threads
-
-* TODO checkpoint system - resume from incomplete run
-  - +see below, would need to write fcs as we go?+
-  - +alternatively have to dump joblist or something+
-  - marshal joblist into json to dump, unmarshal to restore
-    - just need to add a check that job.Result != 0 in the main loop, skip if it's nonzero
-  - commandline option to resume job
   
-* TODO big problems if jobs take more than a minute in my select statement
-  - tried taking out timeout but it froze indefinitely
-  - printing showed it was timing out constantly
-  
-* TODO input file with
-** follow Psi4 input style
-** Alternatively config file like Judd suggested
-  - geometry
-  - number of concurrent jobs
-  - when to write checkpoints
-  - molpro job information
+* TODO make TotalJobs an actual calculation, not a stupid loop
 
 * TODO investigate alternate calculation schemes to minimize floating point error
   - Library/Floats.pdf
@@ -58,6 +41,19 @@
   - two signals gives 900 unique combos compared to 30 of one
 
 * zero values below some threshold - hold off for now, see later 
+
+* DONE check for already calculated 2nd derivatives in 4ths
+  - pass around 2DE
+  - build array of second derivatives - use this for fourths and duplicate seconds
+    - duplicate if sorted indices already in 2DE
+
+* DONE move force constant calculation into goroutine
+  - have to pass fc arrays as argument
+    
+* DONE reevaluate job struct and job list -> maybe a stack of jobs
+  - might get rid of job struct altogether, submit jobs as they are built?
+  - pop job off to submit it?
+    
 
 * DONE Delete files after reading
   - this is back to not working since it was making too many syscalls

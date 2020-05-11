@@ -5,11 +5,12 @@ import (
 	"math"
 	"os"
 	"reflect"
-	"testing"
 	"strconv"
+	"testing"
 )
 
 var (
+	P          = PBS{}
 	testnames  = []string{"H", "O", "H"}
 	testcoords = []float64{0.0000000000, 0.7574590974, 0.5217905143,
 		0.0000000000, 0.0000000000, -0.0657441568,
@@ -159,7 +160,7 @@ func TestMakePBS(t *testing.T) {
 		"rm test1*\nrm test2*\nrm test3*",
 		"rm -rf $TMPDIR"}
 	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
-	got := MakePBS(filename, 35, &tdump)
+	got := P.Make(filename, 35, &tdump)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %#v, wanted %#v", got, want)
 	}
@@ -169,7 +170,7 @@ func TestWritePBS(t *testing.T) {
 	// this is a terrible test after it has been run once successfully
 	filename := "testfiles/molpro.pbs"
 	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
-	WritePBS(filename, "molpro.in", 35, &tdump)
+	P.Write(filename, "molpro.in", 35, &tdump)
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		t.Errorf("%s does not exist", filename)
 	}
@@ -324,7 +325,7 @@ func TestMakePBSFoot(t *testing.T) {
 		"rm test1*\nrm test2*\nrm test3*",
 		"rm -rf $TMPDIR"}
 	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
-	got := MakePBSFoot(5, &tdump)
+	got := P.MakeFoot(5, &tdump)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %#v, wanted %#v", got, want)
 	}
