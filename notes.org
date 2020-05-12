@@ -1,8 +1,15 @@
 * Call signature:
   - go-cart <geometry file> <# go routines>? <# derivative>? <1 for slurm>?
 
+* TODO find where the time is going - guesses below
+  - sleeps in submit -> count how many times this usually happens
+    - might want to go to increasing sleep to have initial ones shorter
+  - timeout in queueandwait -> could be too long or too short
+    - too long if jobs are clearly failed before that
+    - too short if they haven't failed or finished yet
+
 * TODO try on benzene on eland
-** TODO FIGURE OUT WHY IT SUBMITS SO MANY DUPLICATE JOBS
+** DONE FIGURE OUT WHY IT SUBMITS SO MANY DUPLICATE JOBS
    - something wrong with sbatch or my interface with it
    - add tests
 ** DONE add slurm i/o
@@ -10,12 +17,14 @@
     - some kind of interface? 
 ** TODO checkpoint system - resume from incomplete run
    - dump fc arrays and the index of the last job - that's all the info I have and need
-*** TODO dumping checkpoint info
-    - mostly done but need to write index somewhere
+*** DONE dump checkpoint info
+    - +mostly done but need to write index somewhere+
 *** TODO read in checkpoint info and resume
-** TODO big problems if jobs take more than a minute in my select statement
-   - tried taking out timeout but it froze indefinitely
-   - printing showed it was timing out constantly
+
+* TODO big problems if jobs take more than a minute in my select statement
+  - added variable to adjust this but no way to set externally yet
+  - tried taking out timeout but it froze indefinitely
+  - printing showed it was timing out constantly
 
 * TODO input file with
   - geometry
@@ -24,15 +33,18 @@
   - molpro job information - mainly basis set
   - follow Psi4 input style
     
-* TODO switch cases to nested ifs
-  - partially done
+* TODO general refactoring
+** TODO switch cases to nested ifs
+   - partially done
+** TODO make TotalJobs an actual calculation, not a stupid loop
 
 * TODO add mopac i/o
-  
-* TODO make TotalJobs an actual calculation, not a stupid loop
 
 * TODO investigate alternate calculation schemes to minimize floating point error
   - Library/Floats.pdf
+
+* Stack of jobs that can be added to and popped from concurrently
+  - instead of just building smaller job lists as I am doing now
 
 * Should first derivatives in thirds be zero?
 
@@ -103,36 +115,104 @@
     - Submit locks slow it down - sleeping while thread locked
     - Optimal workers is in the range [9,11]
   - differences of 28e-10 in many results throughout testing, sometimes twice that
-|-----------------+--------+------------+-----------+------------+--------------|
-|                 |        | Both Locks | No Locks  | Read Locks | Submit Locks |
-|-----------------+--------+------------+-----------+------------+--------------|
-| Trial           | Repeat | Time       | Time      | Time       | Time         |
-|-----------------+--------+------------+-----------+------------+--------------|
-| 2D - 16 workers |      1 | 11m13.796s |           |            |              |
-|                 |      2 | 12m53.310s |           |            |              |
-|                 |      3 | crash      |           |            |              |
-|-----------------+--------+------------+-----------+------------+--------------|
-| 2D - 12 workers |      1 | 4m23.100s  | 8m15.264s | 4m38.532s  | 11m44.230s   |
-|                 |      2 | 6m18.229s  | 7m2.754s  | 4m16.705s  | 5m52.712s    |
-|                 |      3 | 5m14.072s  | 6m9.490s  | 8m25.406s  | 5m2.215s     |
-|-----------------+--------+------------+-----------+------------+--------------|
-| 2D - 11 workers |      1 | 4m52.667s  | 4m56.138s | 4m1.981s   | 4m46.356s    |
-|                 |      2 | 5m38.494s  | 5m34.129s | 3m54.353s  | 6m48.663s    |
-|                 |      3 | 6m22.455s  | 4m33.178s | 4m48.952s  | 5m41.851s    |
-|-----------------+--------+------------+-----------+------------+--------------|
-| 2D - 10 workers |      1 | 4m26.072s  | 6m19.906s | 5m9.203s   | 5m47.458s    |
-|                 |      2 | 4m28.380s  | 5m24.394s | 5m13.700s  | 5m11.124s    |
-|                 |      3 | 6m28.970s  | 4m23.665s | 4m22.972s  | 5m29.700s    |
-|-----------------+--------+------------+-----------+------------+--------------|
-| 2D - 9 workers  |      1 | 4m45.994s  | 5m27.572s | 4m35.968s  | 5m40.977s    |
-|                 |      2 | 4m41.724s  | 4m57.922s | 4m34.347s  | 5m38.867s    |
-|                 |      3 | 4m40.645s  | 6m57.403s | 4m40.101s  | 5m39.927s    |
-|-----------------+--------+------------+-----------+------------+--------------|
-| 2D - 8 workers  |      1 | 5m7.947s   | 5m15.907s | 5m20.310s  | 6m35.837s    |
-|                 |      2 | 5m7.585s   | 5m14.423s | 5m23.689s  | 6m9.979s     |
-|                 |      3 | 5m7.317s   | 5m2.927s  | 5m30.961s  | 6m11.103s    |
-|-----------------+--------+------------+-----------+------------+--------------|
-| 2D - 4 workers  |      1 | 9m39.824s  |           |            |              |
-|                 |      2 | 9m44.195s  |           |            |              |
-|                 |      3 | 9m34.168s  |           |            |              |
-|-----------------+--------+------------+-----------+------------+--------------|
+|------------+--------+------------+-----------+------------+--------------|
+|            |        | Both Locks | No Locks  | Read Locks | Submit Locks |
+|------------+--------+------------+-----------+------------+--------------|
+| Trial      | Repeat | Time       | Time      | Time       | Time         |
+|------------+--------+------------+-----------+------------+--------------|
+| 16 workers |      1 | 11m13.796s |           |            |              |
+|            |      2 | 12m53.310s |           |            |              |
+|            |      3 | crash      |           |            |              |
+|------------+--------+------------+-----------+------------+--------------|
+| 12 workers |      1 | 4m23.100s  | 8m15.264s | 4m38.532s  | 11m44.230s   |
+|            |      2 | 6m18.229s  | 7m2.754s  | 4m16.705s  | 5m52.712s    |
+|            |      3 | 5m14.072s  | 6m9.490s  | 8m25.406s  | 5m2.215s     |
+|------------+--------+------------+-----------+------------+--------------|
+| 11 workers |      1 | 4m52.667s  | 4m56.138s | 4m1.981s   | 4m46.356s    |
+|            |      2 | 5m38.494s  | 5m34.129s | 3m54.353s  | 6m48.663s    |
+|            |      3 | 6m22.455s  | 4m33.178s | 4m48.952s  | 5m41.851s    |
+|------------+--------+------------+-----------+------------+--------------|
+| 10 workers |      1 | 4m26.072s  | 6m19.906s | 5m9.203s   | 5m47.458s    |
+|            |      2 | 4m28.380s  | 5m24.394s | 5m13.700s  | 5m11.124s    |
+|            |      3 | 6m28.970s  | 4m23.665s | 4m22.972s  | 5m29.700s    |
+|------------+--------+------------+-----------+------------+--------------|
+| 9 workers  |      1 | 4m45.994s  | 5m27.572s | 4m35.968s  | 5m40.977s    |
+|            |      2 | 4m41.724s  | 4m57.922s | 4m34.347s  | 5m38.867s    |
+|            |      3 | 4m40.645s  | 6m57.403s | 4m40.101s  | 5m39.927s    |
+|------------+--------+------------+-----------+------------+--------------|
+| 8 workers  |      1 | 5m7.947s   | 5m15.907s | 5m20.310s  | 6m35.837s    |
+|            |      2 | 5m7.585s   | 5m14.423s | 5m23.689s  | 6m9.979s     |
+|            |      3 | 5m7.317s   | 5m2.927s  | 5m30.961s  | 6m11.103s    |
+|------------+--------+------------+-----------+------------+--------------|
+| 4 workers  |      1 | 9m39.824s  |           |            |              |
+|            |      2 | 9m44.195s  |           |            |              |
+|            |      3 | 9m34.168s  |           |            |              |
+|------------+--------+------------+-----------+------------+--------------|
+
+* Eland benchmarking data for second derivatives 
+|------------+---------+-----------+------------+---------+------|
+|            | c16b5da |           |            | |      |
+|------------+---------+-----------+------------+---------+------|
+| Trial      |  Repeat | Time      | Trial      |  Repeat | Time |
+|------------+---------+-----------+------------+---------+------|
+| 30 workers |       1 | 8m41.723s | 30 workers |       1 |      |
+|            |       2 | 8m44.205s |            |       2 |      |
+|            |       3 | 8m39.478s |            |       3 |      |
+|------------+---------+-----------+------------+---------+------|
+| 15 workers |       1 | 8m39.735s | 15 workers |       1 |      |
+|            |       2 | 8m39.322s |            |       2 |      |
+|            |       3 | 8m39.294s |            |       3 |      |
+|------------+---------+-----------+------------+---------+------|
+| 12 workers |       1 | 8m45.323s | 12 workers |       1 |      |
+|            |       2 |           |            |       2 |      |
+|            |       3 |           |            |       3 |      |
+|------------+---------+-----------+------------+---------+------|
+| 8 workers  |       1 | 8m45.836s | 8 workers  |       1 |      |
+|            |       2 | 8m46.518s |            |       2 |      |
+|            |       3 | 8m46.453s |            |       3 |      |
+|------------+---------+-----------+------------+---------+------|
+| 9 workers  |       1 |           | 9 workers  |       1 |      |
+|            |       2 |           |            |       2 |      |
+|            |       3 |           |            |       3 |      |
+|------------+---------+-----------+------------+---------+------|
+| 8 workers  |       1 |           | 8 workers  |       1 |      |
+|            |       2 |           |            |       2 |      |
+|            |       3 |           |            |       3 |      |
+|------------+---------+-----------+------------+---------+------|
+| 4 workers  |       1 |           | 4 workers  |       1 |      |
+|            |       2 |           |            |       2 |      |
+|            |       3 |           |            |       3 |      |
+|------------+---------+-----------+------------+---------+------|
+
+* Maple benchmarking data for second derivatives c16b5da
+|------------+--------+------------|
+| Trial      | Repeat | Time       |
+|------------+--------+------------|
+| 9 workers  |      1 | 20m35.556s |
+|            |      2 | 22m22.926s |
+|            |      3 |            |
+|------------+--------+------------|
+| 15 workers |      1 |            |
+|            |      2 |            |
+|            |      3 |            |
+|------------+--------+------------|
+| 11 workers |      1 |            |
+|            |      2 |            |
+|            |      3 |            |
+|------------+--------+------------|
+| 10 workers |      1 |            |
+|            |      2 |            |
+|            |      3 |            |
+|------------+--------+------------|
+| 9 workers  |      1 |            |
+|            |      2 |            |
+|            |      3 |            |
+|------------+--------+------------|
+| 8 workers  |      1 |            |
+|            |      2 |            |
+|            |      3 |            |
+|------------+--------+------------|
+| 4 workers  |      1 |            |
+|            |      2 |            |
+|            |      3 |            |
+|------------+--------+------------|

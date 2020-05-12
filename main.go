@@ -189,6 +189,7 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	case 2:
 		x := job.Index[0] - 1
 		y := job.Index[1] - 1
+		E2D[x][y] = job.Result
 		fcs2[x][y] += job.Coeff * job.Result
 	case 3:
 		sort.Ints(job.Index)
@@ -319,6 +320,8 @@ func MakeCheckpoint(fcs2 [][]float64, fcs3, fcs4 []float64, indices ...int) {
 	for _, i := range indices {
 		index += fmt.Sprintf("%d ", i)
 	}
+	id, _ := json.Marshal(index)
+	ioutil.WriteFile("id.json", id, 0755)
 }
 
 func main() {
@@ -370,6 +373,7 @@ func main() {
 		nDerivative, _ = strconv.Atoi(os.Args[3])
 		if os.Args[4] == strconv.Itoa(1) {
 			Q = Slurm{}
+			timeBeforeRetry = 200 * time.Second
 		}
 		checkAfter, _ = strconv.Atoi(os.Args[5])
 	}
