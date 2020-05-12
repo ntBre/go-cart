@@ -28,11 +28,12 @@ const (
 )
 
 var (
-	ErrEnergyNotFound = errors.New("Energy not found in Molpro output")
-	ErrFileNotFound   = errors.New("Molpro output file not found")
-	delta             = 0.005
-	progress          = 1
-	brokenFloat       = math.NaN()
+	ErrEnergyNotFound  = errors.New("Energy not found in Molpro output")
+	ErrFileNotFound    = errors.New("Molpro output file not found")
+	ErrEnergyNotParsed = errors.New("Energy not parsed in Molpro output")
+	delta              = 0.005
+	progress           = 1
+	brokenFloat        = math.NaN()
 	// may need to adjust this if jobs can reasonably take longer than a minute
 	timeBeforeRetry            = time.Second * 60
 	Q               Submission = PBS{}
@@ -131,6 +132,12 @@ func HashName() string {
 	return "job" + strconv.FormatUint(h.Sum64(), 16)
 }
 
+func E2DIndex(n, ncoords int) int {
+	if n < 0 {
+		return IntAbs(n) + ncoords - 1
+	}
+	return n - 1
+}
 func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	ch chan int, totalJobs int, dump *GarbageHeap, fcs2 [][]float64,
 	fcs3, fcs4 []float64, E0 float64, E2D [][]float64) {
@@ -141,16 +148,21 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		job.Status = "done"
 		job.Result = E0
 	case len(job.Steps) == 2:
-		x := IntAbs(job.Steps[0]) - 1
-		y := IntAbs(job.Steps[1]) - 1
+		x := E2DIndex(job.Steps[0], len(coords))
+		y := E2DIndex(job.Steps[1], len(coords))
+		fmt.Printf("Before reorder: x: %d, y: %d, Step1: %d, Step2: %d\n",
+			x, y, job.Steps[0], job.Steps[1])
 		if x > y {
 			temp := x
 			x = y
 			y = temp
 		}
+		fmt.Printf("After reorder: x: %d, y: %d, Step1: %d, Step2: %d\n",
+			x, y, job.Steps[0], job.Steps[1])
 		if E2D[x][y] != 0 {
 			job.Status = "done"
 			job.Result = E2D[x][y]
+			fmt.Println("I got it from the list!")
 			break
 		}
 		fallthrough
@@ -174,9 +186,12 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 			case <-time.After(timeBeforeRetry):
 			}
 			energy, err = ReadMolproOut(outfile)
-			if err != nil {
+			// only resubmit if the file hasnt been created
+			// or there is a problem parsing the energy
+			if err == ErrFileNotFound || err == ErrEnergyNotParsed {
 				Q.Submit(pbsfile)
 			}
+			// else just wait again
 		}
 		if err != nil {
 			panic(err)
@@ -187,9 +202,18 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	}
 	switch len(job.Index) {
 	case 2:
+		if len(job.Steps) == 2 {
+			E2Dx := E2DIndex(job.Steps[0], len(coords))
+			E2Dy := E2DIndex(job.Steps[1], len(coords))
+			if E2Dx > E2Dy {
+				temp := E2Dx
+				E2Dx = E2Dy
+				E2Dy = temp
+			}
+			E2D[E2Dx][E2Dy] = job.Result
+		}
 		x := job.Index[0] - 1
 		y := job.Index[1] - 1
-		E2D[x][y] = job.Result
 		fcs2[x][y] += job.Coeff * job.Result
 	case 3:
 		sort.Ints(job.Index)
@@ -363,7 +387,7 @@ func main() {
 		nDerivative, _ = strconv.Atoi(os.Args[3])
 		if os.Args[4] == strconv.Itoa(1) {
 			Q = Slurm{}
-			timeBeforeRetry = 200 * time.Second
+			// timeBeforeRetry = 200 * time.Second
 		}
 	case 6:
 		geomfile := os.Args[1]
@@ -373,7 +397,7 @@ func main() {
 		nDerivative, _ = strconv.Atoi(os.Args[3])
 		if os.Args[4] == strconv.Itoa(1) {
 			Q = Slurm{}
-			timeBeforeRetry = 200 * time.Second
+			// timeBeforeRetry = 200 * time.Second
 		}
 		checkAfter, _ = strconv.Atoi(os.Args[5])
 	}
@@ -394,10 +418,12 @@ func main() {
 	close(c)
 
 	fcs2 := make([][]float64, ncoords)
-	E2D := make([][]float64, ncoords)
-	for i := 0; i < ncoords; i++ {
-		fcs2[i] = make([]float64, ncoords)
-		E2D[i] = make([]float64, ncoords)
+	E2D := make([][]float64, 2*ncoords)
+	for i := 0; i < 2*ncoords; i++ {
+		if i < ncoords {
+			fcs2[i] = make([]float64, ncoords)
+		}
+		E2D[i] = make([]float64, 2*ncoords)
 	}
 
 	natoms := len(names)

@@ -72,6 +72,9 @@ func ReadMolproOut(filename string) (float64, error) {
 					}
 					f, err := strconv.ParseFloat(split[i+1], 64)
 					runtime.UnlockOSThread()
+					if err != nil {
+						err = ErrEnergyNotParsed
+					}
 					return f, err
 					// return err here to catch problem with conversion
 				}

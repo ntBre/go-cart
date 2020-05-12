@@ -22,6 +22,7 @@
 *** TODO read in checkpoint info and resume
 
 * TODO big problems if jobs take more than a minute in my select statement
+  - might be fixed by change to only resubmit if the file isn't found or parsing fails
   - added variable to adjust this but no way to set externally yet
   - tried taking out timeout but it froze indefinitely
   - printing showed it was timing out constantly
@@ -151,7 +152,7 @@
 
 * Eland benchmarking data for second derivatives 
 |------------+---------+-----------+------------+---------+------|
-|            | c16b5da |           |            | |      |
+|            | c16b5da |           |            | ee74dc9 |      |
 |------------+---------+-----------+------------+---------+------|
 | Trial      |  Repeat | Time      | Trial      |  Repeat | Time |
 |------------+---------+-----------+------------+---------+------|
