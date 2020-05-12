@@ -176,14 +176,14 @@ func TestWritePBS(t *testing.T) {
 	}
 }
 
-// func TestQsubmit(t *testing.T) {
-// 	filename := "testfiles/molpro.pbs"
-// 	got := Qsubmit(filename)
-// 	want := 775241
-// 	if got != want {
-// 		t.Errorf("got %d, wanted %d", got, want)
-// 	}
-// }
+func TestQsubmit(t *testing.T) {
+	filename := "testfiles/molpro.pbs"
+	got := P.Submit(filename)
+	want := 775241
+	if got != want {
+		t.Errorf("got %d, wanted %d", got, want)
+	}
+}
 
 func TestDerivative(t *testing.T) {
 	t.Run("Diagonal second derivative", func(t *testing.T) {
@@ -267,11 +267,6 @@ func TestHashName(t *testing.T) {
 	if got[:3] != "job" {
 		t.Errorf("got %s, wanted %s", got[:3], "job")
 	}
-}
-
-func TestBuildJobList(t *testing.T) {
-	// fmt.Println(len(BuildJobList(minname, mincoord)))
-	// fmt.Println(BuildJobList(minname, mincoord))
 }
 
 func TestPrintFile15(t *testing.T) {

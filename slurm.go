@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Slurm struct{}
@@ -16,6 +17,7 @@ func (s Slurm) MakeHead() []string {
 		"#SBATCH --ntasks=4",
 		"#SBATCH --cpus-per-task=1",
 		"#SBATCH -o /dev/null",
+		"#SBATCH --no-requeue",
 		"#SBATCH --mem=1gb"}
 }
 
@@ -40,12 +42,11 @@ func (s Slurm) Write(pbsfile, molprofile string, count int, dump *GarbageHeap) {
 }
 
 func (s Slurm) Submit(filename string) int {
-	out, _ := exec.Command("sbatch", filename).Output()
-	// fmt.Println(string(out), err)
-	// for err != nil {
-	// 	time.Sleep(time.Second)
-	// 	out, err = exec.Command("sbatch", filename).Output()
-	// }
+	out, err := exec.Command("srun", filename).Output()
+	for err != nil {
+		time.Sleep(time.Second)
+		out, err = exec.Command("sbatch", filename).Output()
+	}
 	b := Basename(string(out))
 	i, _ := strconv.Atoi(b)
 	return i

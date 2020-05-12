@@ -2,22 +2,30 @@
   - go-cart <geometry file> <# go routines>? <# derivative>? <1 for slurm>?
 
 * TODO try on benzene on eland
+** TODO FIGURE OUT WHY IT SUBMITS SO MANY DUPLICATE JOBS
+   - something wrong with sbatch or my interface with it
+   - add tests
 ** DONE add slurm i/o
 *** DONE add switch between pbs and slurm submission
     - some kind of interface? 
 ** TODO checkpoint system - resume from incomplete run
    - dump fc arrays and the index of the last job - that's all the info I have and need
+*** TODO dumping checkpoint info
+    - mostly done but need to write index somewhere
+*** TODO read in checkpoint info and resume
 ** TODO big problems if jobs take more than a minute in my select statement
    - tried taking out timeout but it froze indefinitely
    - printing showed it was timing out constantly
-** TODO input file with
-   - geometry
-   - number of concurrent jobs
-   - when to write checkpoints
-   - molpro job information - mainly basis set
-   - follow Psi4 input style
+
+* TODO input file with
+  - geometry
+  - number of concurrent jobs
+  - when to write checkpoints
+  - molpro job information - mainly basis set
+  - follow Psi4 input style
     
 * TODO switch cases to nested ifs
+  - partially done
 
 * TODO add mopac i/o
   
