@@ -4,12 +4,12 @@ import (
 	"strconv"
 	"strings"
 	"io/ioutil"
-	"runtime"
 	"os"
+	"runtime"
 )
 
 func MakeMolproHead() []string {
-	return []string{"memory,50,m",
+	return []string{"memory,1125,m",
 		"nocompress",
 		"geomtyp=xyz",
 		"angstrom",

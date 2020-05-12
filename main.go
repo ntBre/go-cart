@@ -104,7 +104,8 @@ type Job struct {
 	Coeff   float64
 	Name    string
 	Number  int
-	Count   int
+	Sig1    int
+	Sig2    int
 	Steps   []int
 	Index   []int
 	Status  string
@@ -150,19 +151,14 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	case len(job.Steps) == 2:
 		x := E2DIndex(job.Steps[0], len(coords))
 		y := E2DIndex(job.Steps[1], len(coords))
-		fmt.Printf("Before reorder: x: %d, y: %d, Step1: %d, Step2: %d\n",
-			x, y, job.Steps[0], job.Steps[1])
 		if x > y {
 			temp := x
 			x = y
 			y = temp
 		}
-		fmt.Printf("After reorder: x: %d, y: %d, Step1: %d, Step2: %d\n",
-			x, y, job.Steps[0], job.Steps[1])
 		if E2D[x][y] != 0 {
 			job.Status = "done"
 			job.Result = E2D[x][y]
-			fmt.Println("I got it from the list!")
 			break
 		}
 		fallthrough
@@ -172,16 +168,25 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		pbsfile := "inp/" + job.Name + ".pbs"
 		outfile := "inp/" + job.Name + ".out"
 		WriteMolproIn(molprofile, names, coords)
-		Q.Write(pbsfile, molprofile, job.Count, dump)
+		Q.Write(pbsfile, molprofile, job.Sig1, job.Sig2, dump)
 		job.Number = Q.Submit(pbsfile)
 		energy, err := ReadMolproOut(outfile)
 		for err != nil {
 			sigChan := make(chan os.Signal, 1)
-			sigWant := os.Signal(syscall.Signal(job.Count))
-			signal.Notify(sigChan, sigWant)
+			sig1Want := os.Signal(syscall.Signal(job.Sig1))
+			sig2Want := os.Signal(syscall.Signal(job.Sig2))
+			signal.Notify(sigChan, sig1Want)
 			select {
 			// either receive signal
 			case <-sigChan:
+				// reset to the second signal in the pair
+				signal.Reset()
+				signal.Notify(sigChan, sig2Want)
+				select {
+				// then another signal
+				case <-sigChan:
+				case <-time.After(timeBeforeRetry):
+				}
 			// or timeout after 1 minute and retry
 			case <-time.After(timeBeforeRetry):
 			}
@@ -224,7 +229,6 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		// reverse x, y, z because first dimension has to change slowest
 		// x <= y <= z
 		index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 - 1
-		// fmt.Fprintln(os.Stderr, x, y, z, index)
 		fcs3[index] += job.Coeff * job.Result
 	case 4:
 		sort.Ints(job.Index)
@@ -247,7 +251,7 @@ func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan floa
 	pbsfile := "inp/ref.pbs"
 	outfile := "inp/ref.out"
 	WriteMolproIn(molprofile, names, coords)
-	Q.Write(pbsfile, molprofile, 35, dump)
+	Q.Write(pbsfile, molprofile, 35, 35, dump)
 	Q.Submit(pbsfile)
 	energy, err := ReadMolproOut(outfile)
 	for err != nil {
@@ -296,16 +300,24 @@ func IntAbs(n int) int {
 
 func Drain(jobs []Job, names []string, coords []float64, wg *sync.WaitGroup,
 	ch chan int, totalJobs int, dump *GarbageHeap, fcs2 [][]float64,
-	fcs3, fcs4 []float64, E0 float64, count int, E2D [][]float64) {
+	fcs3, fcs4 []float64, E0 float64, Sig1, Sig2 int, E2D [][]float64) {
 
 	for job, _ := range jobs {
 		wg.Add(1)
 		ch <- 1
-		jobs[job].Count = count
-		if count == RTMAX {
-			count = RTMIN
+		jobs[job].Sig1 = Sig1
+		jobs[job].Sig2 = Sig2
+		// Sig2 increases faster than Sig1
+		// When they hit RTMAX roll over to RTMIN
+		if Sig2 == RTMAX {
+			Sig2 = RTMIN
+			if Sig1 == RTMAX {
+				Sig1 = RTMIN
+			} else {
+				Sig1++
+			}
 		} else {
-			count++
+			Sig2++
 		}
 		go QueueAndWait(jobs[job], names, coords, wg, ch, totalJobs,
 			dump, fcs2, fcs3, fcs4, E0, E2D)
@@ -434,7 +446,8 @@ func main() {
 	fcs4 := make([]float64, other4)
 
 	ch := make(chan int, concRoutines)
-	count := RTMIN // SIGRTMIN
+	Sig1 := RTMIN // SIGRTMIN
+	Sig2 := RTMIN
 
 	// 3 jobs for diagonal + 4 jobs for off diagonal
 	// totalJobs := ncoords*3 + (ncoords*ncoords-ncoords)*4
@@ -445,21 +458,21 @@ func main() {
 				MakeCheckpoint(fcs2, fcs3, fcs4, i, j)
 			}
 			jobs := Derivative(i, j)
-			Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, count, E2D)
+			Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, Sig1, Sig2, E2D)
 			if nDerivative > 2 && j <= i {
 				for k := 1; k <= j; k++ {
 					if progress%checkAfter == 0 {
 						MakeCheckpoint(fcs2, fcs3, fcs4, i, j, k)
 					}
 					jobs := Derivative(i, j, k)
-					Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, count, E2D)
+					Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, Sig1, Sig2, E2D)
 					if nDerivative > 3 {
 						for l := 1; l <= k; l++ {
 							if progress%checkAfter == 0 {
 								MakeCheckpoint(fcs2, fcs3, fcs4, i, j, k, l)
 							}
 							jobs := Derivative(i, j, k, l)
-							Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, count, E2D)
+							Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, Sig1, Sig2, E2D)
 						}
 					}
 				}

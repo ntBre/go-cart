@@ -1,14 +1,14 @@
 package main
 
 import (
-	"strconv"
-	"strings"
 	"io/ioutil"
 	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 )
 
-type PBS struct {}
+type PBS struct{}
 
 func (p PBS) MakeHead() []string {
 	return []string{"#!/bin/sh",
@@ -19,7 +19,7 @@ func (p PBS) MakeHead() []string {
 		"#PBS -W umask=022",
 		"#PBS -l walltime=00:30:00",
 		"#PBS -l ncpus=1",
-		"#PBS -l mem=50mb",
+		"#PBS -l mem=9gb",
 		"module load intel",
 		"module load mvapich2",
 		"module load pbspro",
@@ -31,19 +31,21 @@ func (p PBS) MakeHead() []string {
 		"date"}
 }
 
-func (p PBS) MakeFoot(count int, dump *GarbageHeap) []string {
-	num := strconv.Itoa(count)
-	return []string{"ssh -t maple pkill -" + num + " " + progName,
+func (p PBS) MakeFoot(Sig1, Sig2 int, dump *GarbageHeap) []string {
+	sig1 := strconv.Itoa(Sig1)
+	sig2 := strconv.Itoa(Sig2)
+	return []string{"ssh -t maple pkill -" + sig1 + " " + progName,
+		"ssh -t maple pkill -" + sig2 + " " + progName,
 		strings.Join(dump.Dump(), "\n"), "rm -rf $TMPDIR"}
 }
 
-func (p PBS) Make(filename string, count int, dump *GarbageHeap) []string {
+func (p PBS) Make(filename string, Sig1, Sig2 int, dump *GarbageHeap) []string {
 	body := []string{"molpro -t 1 " + filename}
-	return MakeInput(p.MakeHead(), p.MakeFoot(count, dump), body)
+	return MakeInput(p.MakeHead(), p.MakeFoot(Sig1, Sig2, dump), body)
 }
 
-func (p PBS) Write(pbsfile, molprofile string, count int, dump *GarbageHeap) {
-	lines := p.Make(molprofile, count, dump)
+func (p PBS) Write(pbsfile, molprofile string, Sig1, Sig2 int, dump *GarbageHeap) {
+	lines := p.Make(molprofile, Sig1, Sig2, dump)
 	writelines := strings.Join(lines, "\n")
 	err := ioutil.WriteFile(pbsfile, []byte(writelines), 0755)
 	if err != nil {

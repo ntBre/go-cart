@@ -14,26 +14,28 @@ func (s Slurm) MakeHead() []string {
 	return []string{
 		"#!/bin/bash",
 		"#SBATCH --job-name=go-cart",
-		"#SBATCH --ntasks=4",
+		"#SBATCH --ntasks=1",
 		"#SBATCH --cpus-per-task=1",
 		"#SBATCH -o /dev/null",
 		"#SBATCH --no-requeue",
-		"#SBATCH --mem=1gb"}
+		"#SBATCH --mem=9gb"}
 }
 
-func (s Slurm) MakeFoot(count int, dump *GarbageHeap) []string {
-	num := strconv.Itoa(count)
-	return []string{"ssh -t master pkill -" + num + " " + progName,
+func (s Slurm) MakeFoot(Sig1, Sig2 int, dump *GarbageHeap) []string {
+	sig1 := strconv.Itoa(Sig1)
+	sig2 := strconv.Itoa(Sig2)
+	return []string{"ssh -t master pkill -" + sig1 + " " + progName,
+		"ssh -t master pkill -" + sig2 + " " + progName,
 		strings.Join(dump.Dump(), "\n")}
 }
 
-func (s Slurm) Make(filename string, count int, dump *GarbageHeap) []string {
-	body := []string{"/home/qc/bin/molpro2018.sh 4 1 " + filename}
-	return MakeInput(s.MakeHead(), s.MakeFoot(count, dump), body)
+func (s Slurm) Make(filename string, Sig1, Sig2 int, dump *GarbageHeap) []string {
+	body := []string{"/home/qc/bin/molpro2018.sh 1 1 " + filename}
+	return MakeInput(s.MakeHead(), s.MakeFoot(Sig1, Sig2, dump), body)
 }
 
-func (s Slurm) Write(pbsfile, molprofile string, count int, dump *GarbageHeap) {
-	lines := s.Make(molprofile, count, dump)
+func (s Slurm) Write(pbsfile, molprofile string, Sig1, Sig2 int, dump *GarbageHeap) {
+	lines := s.Make(molprofile, Sig1, Sig2, dump)
 	writelines := strings.Join(lines, "\n")
 	err := ioutil.WriteFile(pbsfile, []byte(writelines), 0755)
 	if err != nil {
@@ -45,7 +47,7 @@ func (s Slurm) Submit(filename string) int {
 	out, err := exec.Command("srun", filename).Output()
 	for err != nil {
 		time.Sleep(time.Second)
-		out, err = exec.Command("sbatch", filename).Output()
+		out, err = exec.Command("srun", filename).Output()
 	}
 	b := Basename(string(out))
 	i, _ := strconv.Atoi(b)

@@ -1,14 +1,16 @@
 * Call signature:
   - go-cart <geometry file> <# go routines>? <# derivative>? <1 for slurm>?
 
-* TODO find where the time is going - guesses below
+* BH3NH3 started at 15:00 12 May 2020
+
+* find where the time is going - guesses below
   - sleeps in submit -> count how many times this usually happens
     - might want to go to increasing sleep to have initial ones shorter
   - timeout in queueandwait -> could be too long or too short
     - too long if jobs are clearly failed before that
     - too short if they haven't failed or finished yet
 
-* TODO try on benzene on eland
+* DONE try on +benzene+ on eland
 ** DONE FIGURE OUT WHY IT SUBMITS SO MANY DUPLICATE JOBS
    - something wrong with sbatch or my interface with it
    - add tests
@@ -19,9 +21,9 @@
    - dump fc arrays and the index of the last job - that's all the info I have and need
 *** DONE dump checkpoint info
     - +mostly done but need to write index somewhere+
-*** TODO read in checkpoint info and resume
+*** WAIT read in checkpoint info and resume
 
-* TODO big problems if jobs take more than a minute in my select statement
+* WAIT big problems if jobs take more than a minute in my select statement
   - might be fixed by change to only resubmit if the file isn't found or parsing fails
   - added variable to adjust this but no way to set externally yet
   - tried taking out timeout but it froze indefinitely
