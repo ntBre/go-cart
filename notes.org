@@ -1,14 +1,7 @@
 * Call signature:
   - go-cart <geometry file> <# go routines>? <# derivative>? <1 for slurm>?
-
-* BH3NH3 started at 15:00 12 May 2020
-
-* find where the time is going - guesses below
-  - sleeps in submit -> count how many times this usually happens
-    - might want to go to increasing sleep to have initial ones shorter
-  - timeout in queueandwait -> could be too long or too short
-    - too long if jobs are clearly failed before that
-    - too short if they haven't failed or finished yet
+    
+* TODO figure out slurm submission to get maximum number of jobs running at once
 
 * DONE try on +benzene+ on eland
 ** DONE FIGURE OUT WHY IT SUBMITS SO MANY DUPLICATE JOBS
@@ -64,6 +57,13 @@
   - two signals gives 900 unique combos compared to 30 of one
 
 * zero values below some threshold - hold off for now, see later 
+
+* DONE find where the time is going - guesses below
+  - sleeps in submit -> count how many times this usually happens
+    - might want to go to increasing sleep to have initial ones shorter
+  - timeout in queueandwait -> could be too long or too short
+    - too long if jobs are clearly failed before that
+    - too short if they haven't failed or finished yet
 
 * DONE check for already calculated 2nd derivatives in 4ths
   - pass around 2DE

@@ -339,7 +339,6 @@ func TotalJobs(nd, ncoords int) (total int) {
 					}
 				}
 			}
-
 		}
 	}
 	return
@@ -373,6 +372,7 @@ func main() {
 		dump         GarbageHeap
 	)
 
+	// BEGIN ParseOSArgs()
 	switch len(os.Args) {
 	case 1:
 		panic("Input geometry not found in command line args")
@@ -413,6 +413,7 @@ func main() {
 		}
 		checkAfter, _ = strconv.Atoi(os.Args[5])
 	}
+	// END ParseOSArgs()
 
 	if _, err := os.Stat("inp/"); os.IsNotExist(err) {
 		os.Mkdir("inp", 0755)
@@ -422,6 +423,8 @@ func main() {
 	}
 
 	// run reference job
+	// TODO I think I can eliminate the channels and waitgroup here
+	// this is blocking anyway as it's set up
 	c := make(chan float64)
 	wg.Add(1)
 	go RefEnergy(names, coords, &wg, c, &dump)

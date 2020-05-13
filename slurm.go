@@ -44,10 +44,12 @@ func (s Slurm) Write(pbsfile, molprofile string, Sig1, Sig2 int, dump *GarbageHe
 }
 
 func (s Slurm) Submit(filename string) int {
-	out, err := exec.Command("srun", filename).Output()
+	out, err := exec.Command("sbatch", filename).Output()
+	// have to use sbatch because srun grabs a whole node
+	// and runs interactively
 	for err != nil {
 		time.Sleep(time.Second)
-		out, err = exec.Command("srun", filename).Output()
+		out, err = exec.Command("sbatch", filename).Output()
 	}
 	b := Basename(string(out))
 	i, _ := strconv.Atoi(b)
