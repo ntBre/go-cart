@@ -21,21 +21,19 @@ func (s Slurm) MakeHead() []string {
 		"#SBATCH --mem=9gb"}
 }
 
-func (s Slurm) MakeFoot(Sig1, Sig2 int, dump *GarbageHeap) []string {
+func (s Slurm) MakeFoot(Sig1 int, dump *GarbageHeap) []string {
 	sig1 := strconv.Itoa(Sig1)
-	sig2 := strconv.Itoa(Sig2)
 	return []string{"ssh -t master pkill -" + sig1 + " " + progName,
-		"ssh -t master pkill -" + sig2 + " " + progName,
 		strings.Join(dump.Dump(), "\n")}
 }
 
-func (s Slurm) Make(filename string, Sig1, Sig2 int, dump *GarbageHeap) []string {
+func (s Slurm) Make(filename string, Sig1 int, dump *GarbageHeap) []string {
 	body := []string{"/home/qc/bin/molpro2018.sh 1 1 " + filename}
-	return MakeInput(s.MakeHead(), s.MakeFoot(Sig1, Sig2, dump), body)
+	return MakeInput(s.MakeHead(), s.MakeFoot(Sig1, dump), body)
 }
 
-func (s Slurm) Write(pbsfile, molprofile string, Sig1, Sig2 int, dump *GarbageHeap) {
-	lines := s.Make(molprofile, Sig1, Sig2, dump)
+func (s Slurm) Write(pbsfile, molprofile string, Sig1 int, dump *GarbageHeap) {
+	lines := s.Make(molprofile, Sig1, dump)
 	writelines := strings.Join(lines, "\n")
 	err := ioutil.WriteFile(pbsfile, []byte(writelines), 0755)
 	if err != nil {

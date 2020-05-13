@@ -20,20 +20,24 @@ import (
 )
 
 const (
-	energyLine = "energy="
-	angborh    = 0.529177249
-	progName   = "go-cart"
-	RTMIN      = 35
-	RTMAX      = 64
+	energyLine       = "energy="
+	molproTerminated = "Molpro calculation terminated"
+	angborh          = 0.529177249
+	progName         = "go-cart"
+	RTMIN            = 35
+	RTMAX            = 64
 )
 
 var (
-	ErrEnergyNotFound  = errors.New("Energy not found in Molpro output")
-	ErrFileNotFound    = errors.New("Molpro output file not found")
-	ErrEnergyNotParsed = errors.New("Energy not parsed in Molpro output")
-	delta              = 0.005
-	progress           = 1
-	brokenFloat        = math.NaN()
+	ErrEnergyNotFound      = errors.New("Energy not found in Molpro output")
+	ErrFileNotFound        = errors.New("Molpro output file not found")
+	ErrEnergyNotParsed     = errors.New("Energy not parsed in Molpro output")
+	ErrFinishedButNoEnergy = errors.New("Molpro output finished but no energy found")
+	ErrFileContainsError   = errors.New("Molpro output file contains an error")
+	delta                  = 0.005
+	progress               = 1
+	Sig1                   = RTMIN
+	brokenFloat            = math.NaN()
 	// may need to adjust this if jobs can reasonably take longer than a minute
 	timeBeforeRetry            = time.Second * 60
 	Q               Submission = PBS{}
@@ -105,7 +109,6 @@ type Job struct {
 	Name    string
 	Number  int
 	Sig1    int
-	Sig2    int
 	Steps   []int
 	Index   []int
 	Status  string
@@ -168,32 +171,34 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		pbsfile := "inp/" + job.Name + ".pbs"
 		outfile := "inp/" + job.Name + ".out"
 		WriteMolproIn(molprofile, names, coords)
-		Q.Write(pbsfile, molprofile, job.Sig1, job.Sig2, dump)
+		Q.Write(pbsfile, molprofile, job.Sig1, dump)
 		job.Number = Q.Submit(pbsfile)
 		energy, err := ReadMolproOut(outfile)
 		for err != nil {
 			sigChan := make(chan os.Signal, 1)
 			sig1Want := os.Signal(syscall.Signal(job.Sig1))
-			sig2Want := os.Signal(syscall.Signal(job.Sig2))
 			signal.Notify(sigChan, sig1Want)
 			select {
 			// either receive signal
 			case <-sigChan:
-				// reset to the second signal in the pair
-				signal.Reset()
-				signal.Notify(sigChan, sig2Want)
-				select {
-				// then another signal
-				case <-sigChan:
-				case <-time.After(timeBeforeRetry):
-				}
-			// or timeout after 1 minute and retry
+				// or timeout after and retry
+				fmt.Println("got signal ", sig1Want, " for step ", progress)
 			case <-time.After(timeBeforeRetry):
+				fmt.Println("didn't get signal, waiting on step ", progress)
 			}
 			energy, err = ReadMolproOut(outfile)
+			if err != nil {
+				fmt.Printf("error %s at step %d\n", err, progress)
+				fmt.Println(outfile)
+			}
 			// only resubmit if the file hasnt been created
 			// or there is a problem parsing the energy
-			if err == ErrFileNotFound || err == ErrEnergyNotParsed {
+			// or it finished but the energy is misaligned somehow
+			// remove file not found as reason to resubmit
+			// ASSUME submissions dont get lost completely
+			// err == ErrFileNotFound ||
+			if err == ErrEnergyNotParsed ||
+				err == ErrFinishedButNoEnergy || err == ErrFileContainsError {
 				Q.Submit(pbsfile)
 			}
 			// else just wait again
@@ -251,7 +256,7 @@ func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan floa
 	pbsfile := "inp/ref.pbs"
 	outfile := "inp/ref.out"
 	WriteMolproIn(molprofile, names, coords)
-	Q.Write(pbsfile, molprofile, 35, 35, dump)
+	Q.Write(pbsfile, molprofile, 35, dump)
 	Q.Submit(pbsfile)
 	energy, err := ReadMolproOut(outfile)
 	for err != nil {
@@ -300,24 +305,17 @@ func IntAbs(n int) int {
 
 func Drain(jobs []Job, names []string, coords []float64, wg *sync.WaitGroup,
 	ch chan int, totalJobs int, dump *GarbageHeap, fcs2 [][]float64,
-	fcs3, fcs4 []float64, E0 float64, Sig1, Sig2 int, E2D [][]float64) {
+	fcs3, fcs4 []float64, E0 float64, E2D [][]float64) {
 
 	for job, _ := range jobs {
 		wg.Add(1)
 		ch <- 1
 		jobs[job].Sig1 = Sig1
-		jobs[job].Sig2 = Sig2
-		// Sig2 increases faster than Sig1
 		// When they hit RTMAX roll over to RTMIN
-		if Sig2 == RTMAX {
-			Sig2 = RTMIN
-			if Sig1 == RTMAX {
-				Sig1 = RTMIN
-			} else {
-				Sig1++
-			}
+		if Sig1 == RTMAX {
+			Sig1 = RTMIN
 		} else {
-			Sig2++
+			Sig1++
 		}
 		go QueueAndWait(jobs[job], names, coords, wg, ch, totalJobs,
 			dump, fcs2, fcs3, fcs4, E0, E2D)
@@ -449,8 +447,6 @@ func main() {
 	fcs4 := make([]float64, other4)
 
 	ch := make(chan int, concRoutines)
-	Sig1 := RTMIN // SIGRTMIN
-	Sig2 := RTMIN
 
 	// 3 jobs for diagonal + 4 jobs for off diagonal
 	// totalJobs := ncoords*3 + (ncoords*ncoords-ncoords)*4
@@ -461,21 +457,24 @@ func main() {
 				MakeCheckpoint(fcs2, fcs3, fcs4, i, j)
 			}
 			jobs := Derivative(i, j)
-			Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, Sig1, Sig2, E2D)
+			Drain(jobs, names, coords, &wg, ch, totalJobs, &dump,
+				fcs2, fcs3, fcs4, E0, E2D)
 			if nDerivative > 2 && j <= i {
 				for k := 1; k <= j; k++ {
 					if progress%checkAfter == 0 {
 						MakeCheckpoint(fcs2, fcs3, fcs4, i, j, k)
 					}
 					jobs := Derivative(i, j, k)
-					Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, Sig1, Sig2, E2D)
+					Drain(jobs, names, coords, &wg, ch, totalJobs, &dump,
+						fcs2, fcs3, fcs4, E0, E2D)
 					if nDerivative > 3 {
 						for l := 1; l <= k; l++ {
 							if progress%checkAfter == 0 {
 								MakeCheckpoint(fcs2, fcs3, fcs4, i, j, k, l)
 							}
 							jobs := Derivative(i, j, k, l)
-							Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, fcs2, fcs3, fcs4, E0, Sig1, Sig2, E2D)
+							Drain(jobs, names, coords, &wg, ch, totalJobs, &dump,
+								fcs2, fcs3, fcs4, E0, E2D)
 						}
 					}
 				}

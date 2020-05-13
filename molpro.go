@@ -1,11 +1,11 @@
 package main
 
 import (
-	"strconv"
-	"strings"
 	"io/ioutil"
 	"os"
 	"runtime"
+	"strconv"
+	"strings"
 )
 
 func MakeMolproHead() []string {
@@ -48,39 +48,43 @@ func WriteMolproIn(filename string, names []string, coords []float64) {
 	}
 }
 
-func ReadMolproOut(filename string) (float64, error) {
+func ReadMolproOut(filename string) (result float64, err error) {
 	runtime.LockOSThread()
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
+	if _, err = os.Stat(filename); os.IsNotExist(err) {
 		runtime.UnlockOSThread()
 		return brokenFloat, ErrFileNotFound
 	}
-	// keeps giving error file not found
-	// even though I just checked if the file exists
-	// so instead of panic in ReadFile, just return the error
-	// and disregard here
+	// flags
+	err = ErrEnergyNotFound
+	result = brokenFloat
 	lines, _ := ReadFile(filename)
 	for _, line := range lines {
+		if strings.Contains(strings.ToUpper(line), "ERROR") {
+			return result, ErrFileContainsError
+		}
 		if strings.Contains(line, energyLine) {
 			split := SplitLine(line)
 			for i, _ := range split {
 				if strings.Contains(split[i], energyLine) {
 					// take the thing right after search term
 					// not the last entry in the line
-					if i+1 >= len(split) {
-						runtime.UnlockOSThread()
-						return brokenFloat, ErrEnergyNotFound
+					if i+1 < len(split) {
+						// assume we found energy so no error
+						// from default EnergyNotFound
+						err = nil
+						result, err = strconv.ParseFloat(split[i+1], 64)
+						if err != nil {
+							err = ErrEnergyNotParsed
+							// false if parse fails
+						}
 					}
-					f, err := strconv.ParseFloat(split[i+1], 64)
-					runtime.UnlockOSThread()
-					if err != nil {
-						err = ErrEnergyNotParsed
-					}
-					return f, err
-					// return err here to catch problem with conversion
 				}
 			}
 		}
+		if strings.Contains(line, molproTerminated) && err != nil {
+			err = ErrFinishedButNoEnergy
+		}
 	}
 	runtime.UnlockOSThread()
-	return brokenFloat, ErrEnergyNotFound
+	return result, err
 }

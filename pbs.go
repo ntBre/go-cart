@@ -31,21 +31,19 @@ func (p PBS) MakeHead() []string {
 		"date"}
 }
 
-func (p PBS) MakeFoot(Sig1, Sig2 int, dump *GarbageHeap) []string {
+func (p PBS) MakeFoot(Sig1 int, dump *GarbageHeap) []string {
 	sig1 := strconv.Itoa(Sig1)
-	sig2 := strconv.Itoa(Sig2)
 	return []string{"ssh -t maple pkill -" + sig1 + " " + progName,
-		"ssh -t maple pkill -" + sig2 + " " + progName,
 		strings.Join(dump.Dump(), "\n"), "rm -rf $TMPDIR"}
 }
 
-func (p PBS) Make(filename string, Sig1, Sig2 int, dump *GarbageHeap) []string {
+func (p PBS) Make(filename string, Sig1 int, dump *GarbageHeap) []string {
 	body := []string{"molpro -t 1 " + filename}
-	return MakeInput(p.MakeHead(), p.MakeFoot(Sig1, Sig2, dump), body)
+	return MakeInput(p.MakeHead(), p.MakeFoot(Sig1, dump), body)
 }
 
-func (p PBS) Write(pbsfile, molprofile string, Sig1, Sig2 int, dump *GarbageHeap) {
-	lines := p.Make(molprofile, Sig1, Sig2, dump)
+func (p PBS) Write(pbsfile, molprofile string, Sig1 int, dump *GarbageHeap) {
+	lines := p.Make(molprofile, Sig1, dump)
 	writelines := strings.Join(lines, "\n")
 	err := ioutil.WriteFile(pbsfile, []byte(writelines), 0755)
 	if err != nil {
