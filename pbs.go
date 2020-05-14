@@ -9,6 +9,7 @@ import (
 )
 
 type PBS struct{}
+// implements Submission
 
 func (p PBS) MakeHead() []string {
 	return []string{"#!/bin/sh",

@@ -1,7 +1,11 @@
 * Call signature:
   - go-cart <geometry file> <# go routines>? <# derivative>? <1 for slurm>?
     
-* TODO figure out slurm submission to get maximum number of jobs running at once
+* bh3nh3 started at 14:31 13 May 2020
+    
+* water fourths on eland in 10 minutes!!!
+    
+* DONE figure out slurm submission to get maximum number of jobs running at once
 
 * DONE try on +benzene+ on eland
 ** DONE FIGURE OUT WHY IT SUBMITS SO MANY DUPLICATE JOBS
@@ -12,11 +16,14 @@
     - some kind of interface? 
 ** TODO checkpoint system - resume from incomplete run
    - dump fc arrays and the index of the last job - that's all the info I have and need
-*** DONE dump checkpoint info
+*** TODO dump checkpoint info
     - +mostly done but need to write index somewhere+
+    - need to write the full index (ijkl) even if it occurs in a seconds step
 *** WAIT read in checkpoint info and resume
+    - delaying this until necessary
 
 * WAIT big problems if jobs take more than a minute in my select statement
+  - Fleshed this out substantially but continue monitoring
   - might be fixed by change to only resubmit if the file isn't found or parsing fails
   - added variable to adjust this but no way to set externally yet
   - tried taking out timeout but it froze indefinitely
@@ -32,6 +39,7 @@
 * TODO general refactoring
 ** TODO switch cases to nested ifs
    - partially done
+   - hopefully a better solution than this still
 ** TODO make TotalJobs an actual calculation, not a stupid loop
 
 * TODO add mopac i/o

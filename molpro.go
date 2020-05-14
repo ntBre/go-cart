@@ -8,6 +8,9 @@ import (
 	"strings"
 )
 
+// should implement Program
+type Molpro struct {}
+
 func MakeMolproHead() []string {
 	return []string{"memory,1125,m",
 		"nocompress",
@@ -58,6 +61,11 @@ func ReadMolproOut(filename string) (result float64, err error) {
 	err = ErrEnergyNotFound
 	result = brokenFloat
 	lines, _ := ReadFile(filename)
+	// ASSUME blank file is only created when PBS runs
+	// blank file has a single newline
+	if len(lines) == 1 {
+		return result, ErrFileNotFound
+	}
 	for _, line := range lines {
 		if strings.Contains(strings.ToUpper(line), "ERROR") {
 			return result, ErrFileContainsError

@@ -9,6 +9,7 @@ import (
 )
 
 type Slurm struct{}
+// implements Submission
 
 func (s Slurm) MakeHead() []string {
 	return []string{

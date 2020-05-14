@@ -29,18 +29,24 @@ const (
 )
 
 var (
-	ErrEnergyNotFound      = errors.New("Energy not found in Molpro output")
-	ErrFileNotFound        = errors.New("Molpro output file not found")
-	ErrEnergyNotParsed     = errors.New("Energy not parsed in Molpro output")
-	ErrFinishedButNoEnergy = errors.New("Molpro output finished but no energy found")
-	ErrFileContainsError   = errors.New("Molpro output file contains an error")
-	delta                  = 0.005
-	progress               = 1
-	Sig1                   = RTMIN
-	brokenFloat            = math.NaN()
+	ErrEnergyNotFound          = errors.New("Energy not found in Molpro output")
+	ErrFileNotFound            = errors.New("Molpro output file not found")
+	ErrEnergyNotParsed         = errors.New("Energy not parsed in Molpro output")
+	ErrFinishedButNoEnergy     = errors.New("Molpro output finished but no energy found")
+	ErrFileContainsError       = errors.New("Molpro output file contains an error")
+	concRoutines           int = 5
+	workers                int = 0
+	delta                      = 0.005
+	progress                   = 1
+	Sig1                       = RTMIN
+	brokenFloat                = math.NaN()
 	// may need to adjust this if jobs can reasonably take longer than a minute
 	timeBeforeRetry            = time.Second * 60
 	Q               Submission = PBS{}
+	fc2Mutex        sync.Mutex
+	fc3Mutex        sync.Mutex
+	fc4Mutex        sync.Mutex
+	e2dMutex        sync.Mutex
 )
 
 func ReadFile(filename string) ([]string, error) {
@@ -188,20 +194,15 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 			}
 			energy, err = ReadMolproOut(outfile)
 			if err != nil {
-				fmt.Printf("error %s at step %d\n", err, progress)
+				fmt.Printf("error %s at step %d with %d workers\n", err, progress, workers)
 				fmt.Println(outfile)
 			}
-			// only resubmit if the file hasnt been created
-			// or there is a problem parsing the energy
-			// or it finished but the energy is misaligned somehow
-			// remove file not found as reason to resubmit
-			// ASSUME submissions dont get lost completely
-			// err == ErrFileNotFound ||
-			if err == ErrEnergyNotParsed ||
-				err == ErrFinishedButNoEnergy || err == ErrFileContainsError {
+			if (err == ErrEnergyNotParsed || err == ErrFinishedButNoEnergy ||
+				err == ErrFileContainsError) ||
+				(err == ErrFileNotFound && workers < concRoutines/2) {
+				fmt.Println("resubmitting for", err)
 				Q.Submit(pbsfile)
 			}
-			// else just wait again
 		}
 		if err != nil {
 			panic(err)
@@ -211,6 +212,7 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		dump.Heap = append(dump.Heap, "inp/"+Basename(molprofile))
 	}
 	switch len(job.Index) {
+	// Locks to prevent concurrent access to the same index
 	case 2:
 		if len(job.Steps) == 2 {
 			E2Dx := E2DIndex(job.Steps[0], len(coords))
@@ -220,11 +222,15 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 				E2Dx = E2Dy
 				E2Dy = temp
 			}
+			e2dMutex.Lock()
 			E2D[E2Dx][E2Dy] = job.Result
+			e2dMutex.Unlock()
 		}
 		x := job.Index[0] - 1
 		y := job.Index[1] - 1
+		fc2Mutex.Lock()
 		fcs2[x][y] += job.Coeff * job.Result
+		fc2Mutex.Unlock()
 	case 3:
 		sort.Ints(job.Index)
 		x := job.Index[0]
@@ -234,7 +240,9 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		// reverse x, y, z because first dimension has to change slowest
 		// x <= y <= z
 		index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 - 1
+		fc3Mutex.Lock()
 		fcs3[index] += job.Coeff * job.Result
+		fc3Mutex.Unlock()
 	case 4:
 		sort.Ints(job.Index)
 		x := job.Index[0]
@@ -242,11 +250,14 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		z := job.Index[2]
 		w := job.Index[3]
 		index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24 - 1
+		fc4Mutex.Lock()
 		fcs4[index] += job.Coeff * job.Result
+		fc4Mutex.Unlock()
 	}
 	fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", progress, totalJobs,
 		100*float64(progress)/float64(totalJobs))
 	progress++
+	workers--
 	<-ch
 }
 
@@ -309,7 +320,9 @@ func Drain(jobs []Job, names []string, coords []float64, wg *sync.WaitGroup,
 
 	for job, _ := range jobs {
 		wg.Add(1)
+		workers++
 		ch <- 1
+		// this probably belongs in the job creation part
 		jobs[job].Sig1 = Sig1
 		// When they hit RTMAX roll over to RTMIN
 		if Sig1 == RTMAX {
@@ -324,6 +337,8 @@ func Drain(jobs []Job, names []string, coords []float64, wg *sync.WaitGroup,
 
 func TotalJobs(nd, ncoords int) (total int) {
 	// this is a disgusting way to calculate this
+	// 3 jobs for diagonal + 4 jobs for off diagonal
+	// totalJobs := ncoords*3 + (ncoords*ncoords-ncoords)*4
 	for i := 1; i <= ncoords; i++ {
 		for j := 1; j <= ncoords; j++ {
 			total += len(Derivative(i, j))
@@ -360,14 +375,13 @@ func MakeCheckpoint(fcs2 [][]float64, fcs3, fcs4 []float64, indices ...int) {
 func main() {
 
 	var (
-		concRoutines int = 5
-		nDerivative  int = 4
-		checkAfter   int = 100
-		names        []string
-		coords       []float64
-		ncoords      int
-		wg           sync.WaitGroup
-		dump         GarbageHeap
+		nDerivative int = 4
+		checkAfter  int = 100
+		names       []string
+		coords      []float64
+		ncoords     int
+		wg          sync.WaitGroup
+		dump        GarbageHeap
 	)
 
 	// BEGIN ParseOSArgs()
@@ -421,7 +435,7 @@ func main() {
 	}
 
 	// run reference job
-	// TODO I think I can eliminate the channels and waitgroup here
+	// I think I can eliminate the channels and waitgroup here
 	// this is blocking anyway as it's set up
 	c := make(chan float64)
 	wg.Add(1)
@@ -430,6 +444,7 @@ func main() {
 	wg.Wait()
 	close(c)
 
+	// BEGIN InitFCArrays
 	fcs2 := make([][]float64, ncoords)
 	E2D := make([][]float64, 2*ncoords)
 	for i := 0; i < 2*ncoords; i++ {
@@ -445,30 +460,30 @@ func main() {
 	fcs3 := make([]float64, other3)
 	other4 := N3N * (N3N + 1) * (N3N + 2) * (N3N + 3) / 24
 	fcs4 := make([]float64, other4)
+	// END InitFCArrays
 
 	ch := make(chan int, concRoutines)
 
-	// 3 jobs for diagonal + 4 jobs for off diagonal
-	// totalJobs := ncoords*3 + (ncoords*ncoords-ncoords)*4
 	totalJobs := TotalJobs(nDerivative, ncoords)
-	for i := 1; i <= ncoords; i++ {
-		for j := 1; j <= ncoords; j++ {
+	var i, j, k, l int
+	for i = 1; i <= ncoords; i++ {
+		for j = 1; j <= ncoords; j++ {
 			if progress%checkAfter == 0 {
-				MakeCheckpoint(fcs2, fcs3, fcs4, i, j)
+				MakeCheckpoint(fcs2, fcs3, fcs4, i, j, k, l)
 			}
 			jobs := Derivative(i, j)
 			Drain(jobs, names, coords, &wg, ch, totalJobs, &dump,
 				fcs2, fcs3, fcs4, E0, E2D)
 			if nDerivative > 2 && j <= i {
-				for k := 1; k <= j; k++ {
+				for k = 1; k <= j; k++ {
 					if progress%checkAfter == 0 {
-						MakeCheckpoint(fcs2, fcs3, fcs4, i, j, k)
+						MakeCheckpoint(fcs2, fcs3, fcs4, i, j, k, l)
 					}
 					jobs := Derivative(i, j, k)
 					Drain(jobs, names, coords, &wg, ch, totalJobs, &dump,
 						fcs2, fcs3, fcs4, E0, E2D)
 					if nDerivative > 3 {
-						for l := 1; l <= k; l++ {
+						for l = 1; l <= k; l++ {
 							if progress%checkAfter == 0 {
 								MakeCheckpoint(fcs2, fcs3, fcs4, i, j, k, l)
 							}
