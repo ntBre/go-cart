@@ -1,0 +1,14 @@
+# maple input file
+concJobs=9
+derivative=2
+QueueType=slurm
+chkInterval=120
+geometry={
+ 3
+ Comment
+ H          0.0000000000        0.7574590974        0.5217905143
+ O          0.0000000000        0.0000000000       -0.0657441568
+ H          0.0000000000       -0.7574590974        0.5217905143
+}
+program=mopac
+delta=0.010

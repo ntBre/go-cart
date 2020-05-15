@@ -22,27 +22,39 @@ import (
 const (
 	energyLine       = "energy="
 	molproTerminated = "Molpro calculation terminated"
-	angborh          = 0.529177249
+	angbohr          = 0.529177249
 	progName         = "go-cart"
 	RTMIN            = 35
 	RTMAX            = 64
 )
 
+// Error messages
 var (
-	ErrEnergyNotFound          = errors.New("Energy not found in Molpro output")
-	ErrFileNotFound            = errors.New("Molpro output file not found")
-	ErrEnergyNotParsed         = errors.New("Energy not parsed in Molpro output")
-	ErrFinishedButNoEnergy     = errors.New("Molpro output finished but no energy found")
-	ErrFileContainsError       = errors.New("Molpro output file contains an error")
-	concRoutines           int = 5
-	workers                int = 0
-	delta                      = 0.005
-	progress                   = 1
-	Sig1                       = RTMIN
-	brokenFloat                = math.NaN()
-	// may need to adjust this if jobs can reasonably take longer than a minute
-	timeBeforeRetry            = time.Second * 60
-	Q               Submission = PBS{}
+	ErrEnergyNotFound      = errors.New("Energy not found in Molpro output")
+	ErrFileNotFound        = errors.New("Molpro output file not found")
+	ErrEnergyNotParsed     = errors.New("Energy not parsed in Molpro output")
+	ErrFinishedButNoEnergy = errors.New("Molpro output finished but no energy found")
+	ErrFileContainsError   = errors.New("Molpro output file contains an error")
+	ErrInputGeomNotFound   = errors.New("Geometry not found in input file")
+)
+
+// Input parameters with default values
+var (
+	concRoutines int        = 5
+	nDerivative  int        = 4
+	Queue        Submission = PBS{}
+	checkAfter   int        = 100
+	Prog         Program    = Molpro{}
+	delta        float64    = 0.005
+)
+
+// Shared variables
+var (
+	progress            = 1
+	Sig1                = RTMIN
+	brokenFloat         = math.NaN()
+	timeBeforeRetry     = time.Second * 60
+	workers         int = 0
 	fc2Mutex        sync.Mutex
 	fc3Mutex        sync.Mutex
 	fc4Mutex        sync.Mutex
@@ -51,7 +63,12 @@ var (
 
 func ReadFile(filename string) ([]string, error) {
 	lines, err := ioutil.ReadFile(filename)
-	return strings.Split(strings.TrimSpace(string(lines)), "\n"), err
+	// trim trailing newlines
+	split := strings.Split(strings.TrimSpace(string(lines)), "\n")
+	for i, line := range split {
+		split[i] = strings.TrimSpace(line)
+	}
+	return split, err
 }
 
 func SplitLine(line string) []string {
@@ -61,11 +78,11 @@ func SplitLine(line string) []string {
 	return s
 }
 
-func ReadInputXYZ(filename string) ([]string, []float64) {
-	// skip the natoms and comment line in xyz file
-	split, _ := ReadFile(filename)
+func ReadInputXYZ(split []string) ([]string, []float64) {
+	// split, _ := ReadFile(filename)
 	names := make([]string, 0)
 	coords := make([]float64, 0)
+	// skip the natoms and comment line in xyz file
 	for _, v := range split[2:] {
 		s := SplitLine(v)
 		if len(s) == 4 {
@@ -148,6 +165,7 @@ func E2DIndex(n, ncoords int) int {
 	}
 	return n - 1
 }
+
 func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	ch chan int, totalJobs int, dump *GarbageHeap, fcs2 [][]float64,
 	fcs3, fcs4 []float64, E0 float64, E2D [][]float64) {
@@ -176,10 +194,10 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		molprofile := "inp/" + job.Name + ".inp"
 		pbsfile := "inp/" + job.Name + ".pbs"
 		outfile := "inp/" + job.Name + ".out"
-		WriteMolproIn(molprofile, names, coords)
-		Q.Write(pbsfile, molprofile, job.Sig1, dump)
-		job.Number = Q.Submit(pbsfile)
-		energy, err := ReadMolproOut(outfile)
+		Prog.WriteIn(molprofile, names, coords)
+		Queue.Write(pbsfile, molprofile, job.Sig1, dump)
+		job.Number = Queue.Submit(pbsfile)
+		energy, err := Prog.ReadOut(outfile)
 		for err != nil {
 			sigChan := make(chan os.Signal, 1)
 			sig1Want := os.Signal(syscall.Signal(job.Sig1))
@@ -192,7 +210,7 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 			case <-time.After(timeBeforeRetry):
 				fmt.Println("didn't get signal, waiting on step ", progress)
 			}
-			energy, err = ReadMolproOut(outfile)
+			energy, err = Prog.ReadOut(outfile)
 			if err != nil {
 				fmt.Printf("error %s at step %d with %d workers\n", err, progress, workers)
 				fmt.Println(outfile)
@@ -201,7 +219,7 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 				err == ErrFileContainsError) ||
 				(err == ErrFileNotFound && workers < concRoutines/2) {
 				fmt.Println("resubmitting for", err)
-				Q.Submit(pbsfile)
+				Queue.Submit(pbsfile)
 			}
 		}
 		if err != nil {
@@ -266,13 +284,13 @@ func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan floa
 	molprofile := "inp/ref.inp"
 	pbsfile := "inp/ref.pbs"
 	outfile := "inp/ref.out"
-	WriteMolproIn(molprofile, names, coords)
-	Q.Write(pbsfile, molprofile, 35, dump)
-	Q.Submit(pbsfile)
-	energy, err := ReadMolproOut(outfile)
+	Prog.WriteIn(molprofile, names, coords)
+	Queue.Write(pbsfile, molprofile, 35, dump)
+	Queue.Submit(pbsfile)
+	energy, err := Prog.ReadOut(outfile)
 	for err != nil {
 		time.Sleep(time.Second)
-		energy, err = ReadMolproOut(outfile)
+		energy, err = Prog.ReadOut(outfile)
 	}
 	dump.Heap = append(dump.Heap, "inp/"+Basename(molprofile))
 	c <- energy
@@ -372,60 +390,62 @@ func MakeCheckpoint(fcs2 [][]float64, fcs3, fcs4 []float64, indices ...int) {
 	ioutil.WriteFile("id.json", id, 0755)
 }
 
+func SetParams(filename string) (names []string, coords []float64, err error) {
+	err = ErrInputGeomNotFound
+	keymap := ParseInfile(filename)
+	for key, value := range keymap {
+		switch key {
+		case ConcJobKey:
+			concRoutines, err = strconv.Atoi(value)
+		case DLevelKey:
+			nDerivative, err = strconv.Atoi(value)
+		case QueueTypeKey:
+			switch value {
+			case "PBS":
+				Queue = PBS{}
+			case "SLURM":
+				Queue = Slurm{}
+			}
+		case ChkIntervalKey:
+			checkAfter, err = strconv.Atoi(value)
+		case ProgKey:
+			switch value {
+			case "MOPAC":
+				Prog = Mopac{}
+			case "MOLPRO":
+				Prog = Molpro{}
+			}
+		case GeomKey:
+			lines := strings.Split(value, "\n")
+			names, coords = ReadInputXYZ(lines)
+		case DeltaKey:
+			delta, err = strconv.ParseFloat(value, 64)
+		}
+	}
+	return
+}
+
 func main() {
 
 	var (
-		nDerivative int = 4
-		checkAfter  int = 100
-		names       []string
-		coords      []float64
-		ncoords     int
-		wg          sync.WaitGroup
-		dump        GarbageHeap
+		names   []string
+		coords  []float64
+		ncoords int
+		wg      sync.WaitGroup
+		dump    GarbageHeap
+		err     error
 	)
 
-	// BEGIN ParseOSArgs()
 	switch len(os.Args) {
 	case 1:
 		panic("Input geometry not found in command line args")
 	case 2:
-		geomfile := os.Args[1]
-		names, coords = ReadInputXYZ(geomfile)
+		names, coords, err = SetParams(os.Args[1])
 		ncoords = len(coords)
-	case 3:
-		geomfile := os.Args[1]
-		names, coords = ReadInputXYZ(geomfile)
-		ncoords = len(coords)
-		concRoutines, _ = strconv.Atoi(os.Args[2])
-	case 4:
-		geomfile := os.Args[1]
-		names, coords = ReadInputXYZ(geomfile)
-		ncoords = len(coords)
-		concRoutines, _ = strconv.Atoi(os.Args[2])
-		nDerivative, _ = strconv.Atoi(os.Args[3])
-	case 5:
-		geomfile := os.Args[1]
-		names, coords = ReadInputXYZ(geomfile)
-		ncoords = len(coords)
-		concRoutines, _ = strconv.Atoi(os.Args[2])
-		nDerivative, _ = strconv.Atoi(os.Args[3])
-		if os.Args[4] == strconv.Itoa(1) {
-			Q = Slurm{}
-			// timeBeforeRetry = 200 * time.Second
+		if err != nil {
+			panic(err)
 		}
-	case 6:
-		geomfile := os.Args[1]
-		names, coords = ReadInputXYZ(geomfile)
-		ncoords = len(coords)
-		concRoutines, _ = strconv.Atoi(os.Args[2])
-		nDerivative, _ = strconv.Atoi(os.Args[3])
-		if os.Args[4] == strconv.Itoa(1) {
-			Q = Slurm{}
-			// timeBeforeRetry = 200 * time.Second
-		}
-		checkAfter, _ = strconv.Atoi(os.Args[5])
 	}
-	// END ParseOSArgs()
 
 	if _, err := os.Stat("inp/"); os.IsNotExist(err) {
 		os.Mkdir("inp", 0755)
@@ -502,14 +522,14 @@ func main() {
 	// Unit conversion and denominator handling
 	for i := 0; i < ncoords; i++ {
 		for j := 0; j < ncoords; j++ {
-			fcs2[i][j] = fcs2[i][j] * angborh * angborh / (4 * delta * delta)
+			fcs2[i][j] = fcs2[i][j] * angbohr * angbohr / (4 * delta * delta)
 		}
 	}
 	for i, _ := range fcs3 {
-		fcs3[i] = fcs3[i] * angborh * angborh * angborh / (8 * delta * delta * delta)
+		fcs3[i] = fcs3[i] * angbohr * angbohr * angbohr / (8 * delta * delta * delta)
 	}
 	for i, _ := range fcs4 {
-		fcs4[i] = fcs4[i] * angborh * angborh * angborh * angborh / (16 * delta * delta * delta * delta)
+		fcs4[i] = fcs4[i] * angbohr * angbohr * angbohr * angbohr / (16 * delta * delta * delta * delta)
 	}
 
 	PrintFile15(fcs2, natoms)

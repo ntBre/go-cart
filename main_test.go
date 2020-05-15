@@ -7,10 +7,12 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+	"github.com/google/go-cmp/cmp"
 )
 
 var (
 	P          = PBS{}
+	TestProg   = Molpro{}
 	testnames  = []string{"H", "O", "H"}
 	testcoords = []float64{0.0000000000, 0.7574590974, 0.5217905143,
 		0.0000000000, 0.0000000000, -0.0657441568,
@@ -60,9 +62,24 @@ var (
 	}
 )
 
+func TestReadFile(t *testing.T) {
+	got, _ := ReadFile("testfiles/geom.xyz")
+	want := []string{
+		"3",
+		"Comment",
+		"H          0.0000000000        0.7574590974        0.5217905143",
+		"O          0.0000000000        0.0000000000       -0.0657441568",
+		"H          0.0000000000       -0.7574590974        0.5217905143"}
+	if !reflect.DeepEqual(got, want) {
+		fmt.Println(cmp.Diff(got, want))
+		t.Errorf("got %#v, wanted %#v\n", got, want)
+	}
+}
+
 func TestReadInputXYZ(t *testing.T) {
 	want, want2 := testnames, testcoords
-	got, got2 := ReadInputXYZ("testfiles/geom.xyz")
+	lines, _ := ReadFile("testfiles/geom.xyz")
+	got, got2 := ReadInputXYZ(lines)
 	if !reflect.DeepEqual(got, want) && !reflect.DeepEqual(got2, want2) {
 		t.Errorf("got %v, wanted %v\n", got, want)
 	}
@@ -70,7 +87,7 @@ func TestReadInputXYZ(t *testing.T) {
 
 func TestMakeMolproIn(t *testing.T) {
 	want := []string{
-		"memory,50,m",
+		"memory,1125,m",
 		"nocompress",
 		"geomtyp=xyz",
 		"angstrom",
@@ -84,7 +101,7 @@ func TestMakeMolproIn(t *testing.T) {
 		"set,spin",
 		"hf",
 		"{CCSD(T)-F12}"}
-	got := MakeMolproIn(testnames, testcoords)
+	got := TestProg.MakeIn(testnames, testcoords)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %#v\nwanted %#v\n", got, want)
 	}
@@ -93,7 +110,7 @@ func TestMakeMolproIn(t *testing.T) {
 func TestWriteMolproIn(t *testing.T) {
 	// this is a terrible test after it has been run once successfully
 	filename := "testfiles/molpro.in"
-	WriteMolproIn(filename, testnames, testcoords)
+	TestProg.WriteIn(filename, testnames, testcoords)
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		t.Errorf("%s does not exist", filename)
 	}
@@ -102,7 +119,7 @@ func TestWriteMolproIn(t *testing.T) {
 func TestReadMolproOut(t *testing.T) {
 	t.Run("Output file found and energy therein", func(t *testing.T) {
 		filename := "testfiles/molpro.out"
-		got, err := ReadMolproOut(filename)
+		got, err := TestProg.ReadOut(filename)
 		want := -76.369839607972
 		if err != nil {
 			t.Errorf("got an error, but didn't want one")
@@ -113,7 +130,7 @@ func TestReadMolproOut(t *testing.T) {
 
 	t.Run("Output file found but no energy therein", func(t *testing.T) {
 		filename := "testfiles/brokenmolpro.out"
-		got, err := ReadMolproOut(filename)
+		got, err := TestProg.ReadOut(filename)
 		want := brokenFloat
 		if err == nil {
 			t.Errorf("wanted an error, but didn't get one")
@@ -124,7 +141,7 @@ func TestReadMolproOut(t *testing.T) {
 
 	t.Run("No output file found", func(t *testing.T) {
 		filename := "testfiles/molpro1.out"
-		got, err := ReadMolproOut(filename)
+		got, err := TestProg.ReadOut(filename)
 		want := brokenFloat
 		if err == nil {
 			t.Errorf("wanted an error, but didn't get one")
@@ -145,7 +162,7 @@ func TestMakePBS(t *testing.T) {
 		"#PBS -W umask=022",
 		"#PBS -l walltime=00:30:00",
 		"#PBS -l ncpus=1",
-		"#PBS -l mem=50mb",
+		"#PBS -l mem=9gb",
 		"module load intel",
 		"module load mvapich2",
 		"module load pbspro",
@@ -323,5 +340,19 @@ func TestMakePBSFoot(t *testing.T) {
 	got := P.MakeFoot(5, &tdump)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %#v, wanted %#v", got, want)
+	}
+}
+
+func TestSetParams(t *testing.T) {
+	wantBefore := concRoutines == 5 && nDerivative == 4 && Queue == PBS{} &&
+		checkAfter== 100 && Prog==Molpro{} &&delta==0.005
+	if !wantBefore {
+		t.Errorf("something wrong to start")
+	}
+	SetParams("sample.in")
+	wantAfter := concRoutines == 9 && nDerivative == 2 && Queue == Slurm{} &&
+		checkAfter== 120 && Prog==Mopac{} &&delta==0.010
+	if !wantAfter {
+		t.Errorf("something wrong after SetParams")
 	}
 }

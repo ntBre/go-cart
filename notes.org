@@ -16,7 +16,7 @@
     - some kind of interface? 
 ** TODO checkpoint system - resume from incomplete run
    - dump fc arrays and the index of the last job - that's all the info I have and need
-*** TODO dump checkpoint info
+*** DONE dump checkpoint info
     - +mostly done but need to write index somewhere+
     - need to write the full index (ijkl) even if it occurs in a seconds step
 *** WAIT read in checkpoint info and resume
@@ -30,19 +30,34 @@
   - printing showed it was timing out constantly
 
 * TODO input file with
-  - geometry
-  - number of concurrent jobs
-  - when to write checkpoints
-  - molpro job information - mainly basis set
-  - follow Psi4 input style
+** DONE geometry
+** DONE number of concurrent jobs
+** DONE when to write checkpoints
+** TODO molpro job information
+   - this will branch depending on molpro/mopac job
+   - method
+   - basis set
+** WAIT follow Psi4 input style
+   - not doing this for now
     
+* TODO take command line flags
+  - o to overwrite inp
+  - h for help
+
 * TODO general refactoring
 ** TODO switch cases to nested ifs
    - partially done
    - hopefully a better solution than this still
 ** TODO make TotalJobs an actual calculation, not a stupid loop
+** TODO get back to testing everything
 
 * TODO add mopac i/o
+** DONE read inputs:
+*** DONE equilibrium geometry - same as molpro, xyz file
+*** DONE parameters
+    - just link to params file - params.dat hard coded
+** WAIT write input files - need to test
+** TODO read output files
 
 * TODO investigate alternate calculation schemes to minimize floating point error
   - Library/Floats.pdf

@@ -8,10 +8,9 @@ import (
 	"strings"
 )
 
-// should implement Program
 type Molpro struct {}
 
-func MakeMolproHead() []string {
+func (m Molpro) MakeHead() []string {
 	return []string{"memory,1125,m",
 		"nocompress",
 		"geomtyp=xyz",
@@ -19,7 +18,7 @@ func MakeMolproHead() []string {
 		"geometry={"}
 }
 
-func MakeMolproFoot() []string {
+func (m Molpro) MakeFoot() []string {
 	return []string{"}",
 		"basis=cc-pVTZ-F12",
 		"set,charge=0",
@@ -28,7 +27,7 @@ func MakeMolproFoot() []string {
 		"{CCSD(T)-F12}"}
 }
 
-func MakeMolproIn(names []string, coords []float64) []string {
+func (m Molpro) MakeIn(names []string, coords []float64) []string {
 	body := make([]string, 0)
 	for i, _ := range names {
 		tmp := make([]string, 0)
@@ -39,11 +38,11 @@ func MakeMolproIn(names []string, coords []float64) []string {
 		}
 		body = append(body, strings.Join(tmp, " "))
 	}
-	return MakeInput(MakeMolproHead(), MakeMolproFoot(), body)
+	return MakeInput(m.MakeHead(), m.MakeFoot(), body)
 }
 
-func WriteMolproIn(filename string, names []string, coords []float64) {
-	lines := MakeMolproIn(names, coords)
+func (m Molpro) WriteIn(filename string, names []string, coords []float64) {
+	lines := m.MakeIn(names, coords)
 	writelines := strings.Join(lines, "\n")
 	err := ioutil.WriteFile(filename, []byte(writelines), 0755)
 	if err != nil {
@@ -51,13 +50,12 @@ func WriteMolproIn(filename string, names []string, coords []float64) {
 	}
 }
 
-func ReadMolproOut(filename string) (result float64, err error) {
+func (m Molpro) ReadOut(filename string) (result float64, err error) {
 	runtime.LockOSThread()
 	if _, err = os.Stat(filename); os.IsNotExist(err) {
 		runtime.UnlockOSThread()
 		return brokenFloat, ErrFileNotFound
 	}
-	// flags
 	err = ErrEnergyNotFound
 	result = brokenFloat
 	lines, _ := ReadFile(filename)
