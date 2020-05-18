@@ -205,7 +205,7 @@ func TestQsubmit(t *testing.T) {
 func TestDerivative(t *testing.T) {
 	t.Run("Diagonal second derivative", func(t *testing.T) {
 		got := Derivative(1, 1)[0]
-		want := Job{1, "untestedName", 0, 0, []int{1, 1}, []int{1, 1}, "queued", 0, 0}
+		want := Job{1, "untestedName", 0, 0, []int{1, 1}, []int{1, 1}, "queued", 0, 0, false}
 		if want.Coeff != got.Coeff ||
 			!reflect.DeepEqual(want.Steps, got.Steps) ||
 			want.Status != got.Status ||
@@ -217,7 +217,7 @@ func TestDerivative(t *testing.T) {
 	})
 	t.Run("Off-diagonal second derivative", func(t *testing.T) {
 		got := Derivative(1, 2)[0]
-		want := Job{1, "untestedName", 0, 0, []int{1, 2}, []int{1, 2}, "queued", 0, 0}
+		want := Job{1, "untestedName", 0, 0, []int{1, 2}, []int{1, 2}, "queued", 0, 0, false}
 		if want.Coeff != got.Coeff ||
 			!reflect.DeepEqual(want.Steps, got.Steps) ||
 			want.Status != got.Status ||
@@ -353,6 +353,6 @@ func TestSetParams(t *testing.T) {
 	wantAfter := concRoutines == 9 && nDerivative == 2 && Queue == Slurm{} &&
 		checkAfter== 120 && Prog==Mopac{} &&delta==0.010
 	if !wantAfter {
-		t.Errorf("something wrong after SetParams")
+		t.Error("something wrong after SetParams", concRoutines, nDerivative, Queue, checkAfter, Prog, delta)
 	}
 }

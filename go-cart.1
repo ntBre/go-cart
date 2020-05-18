@@ -1,0 +1,92 @@
+.TH go-cart 1
+.SH NAME
+go-cart \- generate a quartic force field in Cartesian coordinates to be used with SPECTRO
+.SH SYNOPSIS
+.B go-cart
+[\fB\-cho\fR]
+.IR input-file
+.SH DESCRIPTION
+Use
+.I program
+to generate a force field of the 
+.I derivative
+level, with a step size of \fIdelta\fR.
+The type of the queuing system should be specified by
+\fIqueuetype\fR. Currently supported options for the queueing system are Slurm and PBS,
+while the options for the program are Molpro and Mopac. 
+.I chkinterval
+gives the number of jobs after which a checkpoint should be written. Checkpoints are written
+in the form of JSON files, with names corresponding to the level of derivative. \fBfcn\fR, 
+where \fBn\fR is the number of the derivative level, is the naming scheme for these files.
+Also written at each checkpoint is \fBe2d.json\fR, which contains the second derivative
+energies for each index in the force constant array and is used to minimize duplicate calculations.
+.P
+.I concjobs
+gives the number of concurrent goroutines available to the program. While goroutines do not
+coincide directly with hardware threads, system calls inside of goroutines will spawn threads
+that cannot be limited by \fIconcjobs\fR. This means that when a user is limited to a 
+relatively small number of threads, 
+.I concjobs
+must be kept a factor of 2-3 smaller. If you get an error saying that too many threads have been
+spawned, try decreasing this number.
+Finally, the 
+.I geometry
+should be given in a block surrounded by {}, in typical .xyz input, including the number of
+atoms and the comment line. The expected units are Angstroms.
+.P
+The general syntax of each line of the input file is a keyword, followed by an =, followed
+by the corresponding value.
+An example for declaring the level of derivative to be calculated is derivative=2. The only 
+exception to this is the 
+.I geometry
+keyword, which should be specified as geometry={, followed by a newline, followed by an XYZ
+style input, followed by another newline and a terminal }. An example input file is shown below.
+All keywords are case-insensitive and order-independent. However, the lack of spaces around the 
+= is required. Any line that does not contain a keyword followed by = or begins with # is treated as a comment.
+Comments following a keyword input are not supported.
+.P
+The input file should be given as the first non-flag argument at the invocation of the program.
+In addition to the JSON checkpoint files, output files for use in SPECTRO are produced and named
+\fBfort\fR. The extension \fB15\fR corresponds to the harmonic force constants, while \fB30\fR
+and \fB40\fR correspond to the third- and fourth-degree force constants, respectively. All of these
+files are written to the directory where \fBgo-cart\fR is run. Additionally, the directory
+\fBinp/\fR is created to hold the input files for \fIprogram\fR. If this directory already exists,
+the program will exit with an error, but it can be overwritten with the \fB\-o\fR option.
+.SH EXAMPLE INPUT
+concjobs=9
+.br
+derivative=2
+.br
+queuetype=slurm
+.br
+chkinterval=120
+.br
+geometry={
+.br
+ 3
+.br
+ Comment
+.br
+ H          0.0000000000        0.7574590974        0.5217905143
+.br
+ O          0.0000000000        0.0000000000       -0.0657441568
+.br
+ H          0.0000000000       -0.7574590974        0.5217905143
+.br
+}
+.br
+program=mopac
+.br
+delta=0.005
+.SH OPTIONS
+.TP
+.BR \-c
+Continue from the checkpoint given by the JSON files in the current directory
+.TP
+.BR \-h
+Print the command line options and exit
+.TP
+.BR \-o
+Overwrite the existing input directory \fBinp/\fR
+.SH AUTHOR
+Written by Brent R. Westbrook at the University of Mississippi in 2020

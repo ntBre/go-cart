@@ -15,6 +15,11 @@ const (
 	ProgKey
 	GeomKey
 	DeltaKey
+	MethodKey
+	BasisKey
+	ChargeKey
+	SpinKey
+	NumKeys
 )
 
 func (k Key) String() string {
@@ -26,6 +31,10 @@ func (k Key) String() string {
 		"ProgKey",
 		"GeomKey",
 		"DeltaKey",
+		"MethodKey",
+		"BasisKey",
+		"ChargeKey",
+		"SpinKey",
 	}[k]
 }
 
@@ -48,9 +57,16 @@ func ParseInfile(filename string) map[Key]string {
 		Regexp{regexp.MustCompile(`(?i)chkinterval=`), ChkIntervalKey},
 		Regexp{regexp.MustCompile(`(?i)program=`), ProgKey},
 		Regexp{regexp.MustCompile(`(?i)delta=`), DeltaKey},
+		Regexp{regexp.MustCompile(`(?i)method=`), MethodKey},
+		Regexp{regexp.MustCompile(`(?i)basis=`), BasisKey},
+		Regexp{regexp.MustCompile(`(?i)charge=`), ChargeKey},
+		Regexp{regexp.MustCompile(`(?i)spin=`), SpinKey},
 	}
 	geom := regexp.MustCompile(`(?i)geometry={`)
 	for i := 0; i < len(lines); {
+		if lines[i][0] == '#' {
+			continue
+		}
 		if geom.MatchString(lines[i]) {
 			i++
 			geomlines := make([]string, 0)

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"hash/maphash"
 	"io/ioutil"
@@ -46,6 +47,11 @@ var (
 	checkAfter   int        = 100
 	Prog         Program    = Molpro{}
 	delta        float64    = 0.005
+	molproMethod string     = "CCSD(T)-F12"
+	mopacMethod  string     = "PM6"
+	basis        string     = "cc-pVTZ-F12"
+	charge       string     = "0"
+	spin         string     = "1"
 )
 
 // Shared variables
@@ -59,6 +65,24 @@ var (
 	fc3Mutex        sync.Mutex
 	fc4Mutex        sync.Mutex
 	e2dMutex        sync.Mutex
+	fc2             [][]float64
+	fc3             []float64
+	fc4             []float64
+	e2d             [][]float64
+	fc2Done         [][]float64
+	fc3Done         []float64
+	fc4Done         []float64
+	e2dDone         [][]float64
+	fc2Count        [][]int
+	fc3Count        []int
+	fc4Count        []int
+)
+
+// Command line flags
+var (
+	checkpoint bool
+	help       bool
+	overwrite  bool
 )
 
 func ReadFile(filename string) ([]string, error) {
@@ -128,15 +152,16 @@ func (g *GarbageHeap) Dump() []string {
 }
 
 type Job struct {
-	Coeff   float64
-	Name    string
-	Number  int
-	Sig1    int
-	Steps   []int
-	Index   []int
-	Status  string
-	Retries int
-	Result  float64
+	Coeff    float64
+	Name     string
+	Number   int
+	Sig1     int
+	Steps    []int
+	Index    []int
+	Status   string
+	Retries  int
+	Result   float64
+	Terminal bool
 }
 
 func Step(coords []float64, steps ...int) []float64 {
@@ -159,16 +184,23 @@ func HashName() string {
 	return "job" + strconv.FormatUint(h.Sum64(), 16)
 }
 
-func E2DIndex(n, ncoords int) int {
+func e2dIndex(n, ncoords int) int {
 	if n < 0 {
 		return IntAbs(n) + ncoords - 1
 	}
 	return n - 1
 }
 
+func Index3(x, y, z int) int {
+	return x + (y-1)*y/2 + (z-1)*z*(z+1)/6 - 1
+}
+
+func Index4(x, y, z, w int) int {
+	return x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24 - 1
+}
+
 func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
-	ch chan int, totalJobs int, dump *GarbageHeap, fcs2 [][]float64,
-	fcs3, fcs4 []float64, E0 float64, E2D [][]float64) {
+	ch chan int, totalJobs int, dump *GarbageHeap, E0 float64) {
 
 	defer wg.Done()
 	switch {
@@ -176,16 +208,16 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		job.Status = "done"
 		job.Result = E0
 	case len(job.Steps) == 2:
-		x := E2DIndex(job.Steps[0], len(coords))
-		y := E2DIndex(job.Steps[1], len(coords))
+		x := e2dIndex(job.Steps[0], len(coords))
+		y := e2dIndex(job.Steps[1], len(coords))
 		if x > y {
 			temp := x
 			x = y
 			y = temp
 		}
-		if E2D[x][y] != 0 {
+		if e2d[x][y] != 0 {
 			job.Status = "done"
-			job.Result = E2D[x][y]
+			job.Result = e2d[x][y]
 			break
 		}
 		fallthrough
@@ -233,44 +265,46 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	// Locks to prevent concurrent access to the same index
 	case 2:
 		if len(job.Steps) == 2 {
-			E2Dx := E2DIndex(job.Steps[0], len(coords))
-			E2Dy := E2DIndex(job.Steps[1], len(coords))
-			if E2Dx > E2Dy {
-				temp := E2Dx
-				E2Dx = E2Dy
-				E2Dy = temp
+			e2dx := e2dIndex(job.Steps[0], len(coords))
+			e2dy := e2dIndex(job.Steps[1], len(coords))
+			if e2dx > e2dy {
+				temp := e2dx
+				e2dx = e2dy
+				e2dy = temp
 			}
 			e2dMutex.Lock()
-			E2D[E2Dx][E2Dy] = job.Result
+			e2d[e2dx][e2dy] = job.Result
 			e2dMutex.Unlock()
 		}
 		x := job.Index[0] - 1
 		y := job.Index[1] - 1
 		fc2Mutex.Lock()
-		fcs2[x][y] += job.Coeff * job.Result
+		fc2[x][y] += job.Coeff * job.Result
 		fc2Mutex.Unlock()
+		fc2Count[x][y]--
+		if fc2Count[x][y] == 0 {
+			fc2Done[x][y] = fc2[x][y]
+		}
 	case 3:
-		sort.Ints(job.Index)
-		x := job.Index[0]
-		y := job.Index[1]
-		z := job.Index[2]
-		// from spectro manual, subtract 1 for zero-indexed slice
-		// reverse x, y, z because first dimension has to change slowest
-		// x <= y <= z
-		index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 - 1
+		sort.Ints(job.Index) // need to be in order, from spectro manual
+		index := Index3(job.Index[0], job.Index[1], job.Index[2])
 		fc3Mutex.Lock()
-		fcs3[index] += job.Coeff * job.Result
+		fc3[index] += job.Coeff * job.Result
 		fc3Mutex.Unlock()
+		fc3Count[index]--
+		if fc3Count[index] == 0 {
+			fc3Done[index] = fc3[index]
+		}
 	case 4:
 		sort.Ints(job.Index)
-		x := job.Index[0]
-		y := job.Index[1]
-		z := job.Index[2]
-		w := job.Index[3]
-		index := x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24 - 1
+		index := Index4(job.Index[0], job.Index[1], job.Index[2], job.Index[3])
 		fc4Mutex.Lock()
-		fcs4[index] += job.Coeff * job.Result
+		fc4[index] += job.Coeff * job.Result
 		fc4Mutex.Unlock()
+		fc4Count[index]--
+		if fc4Count[index] == 0 {
+			fc4Done[index] = fc4[index]
+		}
 	}
 	fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", progress, totalJobs,
 		100*float64(progress)/float64(totalJobs))
@@ -279,8 +313,7 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	<-ch
 }
 
-func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan float64, dump *GarbageHeap) {
-	defer wg.Done()
+func RefEnergy(names []string, coords []float64, dump *GarbageHeap) (energy float64) {
 	molprofile := "inp/ref.inp"
 	pbsfile := "inp/ref.pbs"
 	outfile := "inp/ref.out"
@@ -293,14 +326,14 @@ func RefEnergy(names []string, coords []float64, wg *sync.WaitGroup, c chan floa
 		energy, err = Prog.ReadOut(outfile)
 	}
 	dump.Heap = append(dump.Heap, "inp/"+Basename(molprofile))
-	c <- energy
+	return
 }
 
-func PrintFile15(fcs [][]float64, natoms int) int {
+func PrintFile15(fc [][]float64, natoms int) int {
 	f, _ := os.Create("fort.15")
 	fmt.Fprintf(f, "%5d%5d\n", natoms, 6*natoms) // still not sure why this is just times 6
 	flat := make([]float64, 0)
-	for _, v := range fcs {
+	for _, v := range fc {
 		flat = append(flat, v...)
 	}
 	for i := 0; i < len(flat); i += 3 {
@@ -309,19 +342,19 @@ func PrintFile15(fcs [][]float64, natoms int) int {
 	return len(flat)
 }
 
-func PrintFile30(fcs []float64, natoms, other int) {
+func PrintFile30(fc []float64, natoms, other int) {
 	f, _ := os.Create("fort.30")
 	fmt.Fprintf(f, "%5d%5d\n", natoms, other)
-	for i := 0; i < len(fcs); i += 3 {
-		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n", fcs[i], fcs[i+1], fcs[i+2])
+	for i := 0; i < len(fc); i += 3 {
+		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n", fc[i], fc[i+1], fc[i+2])
 	}
 }
 
-func PrintFile40(fcs []float64, natoms, other int) {
+func PrintFile40(fc []float64, natoms, other int) {
 	f, _ := os.Create("fort.40")
 	fmt.Fprintf(f, "%5d%5d\n", natoms, other)
-	for i := 0; i < len(fcs); i += 3 {
-		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n", fcs[i], fcs[i+1], fcs[i+2])
+	for i := 0; i < len(fc); i += 3 {
+		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n", fc[i], fc[i+1], fc[i+2])
 	}
 }
 
@@ -333,8 +366,7 @@ func IntAbs(n int) int {
 }
 
 func Drain(jobs []Job, names []string, coords []float64, wg *sync.WaitGroup,
-	ch chan int, totalJobs int, dump *GarbageHeap, fcs2 [][]float64,
-	fcs3, fcs4 []float64, E0 float64, E2D [][]float64) {
+	ch chan int, totalJobs int, dump *GarbageHeap, E0 float64) {
 
 	for job, _ := range jobs {
 		wg.Add(1)
@@ -348,8 +380,7 @@ func Drain(jobs []Job, names []string, coords []float64, wg *sync.WaitGroup,
 		} else {
 			Sig1++
 		}
-		go QueueAndWait(jobs[job], names, coords, wg, ch, totalJobs,
-			dump, fcs2, fcs3, fcs4, E0, E2D)
+		go QueueAndWait(jobs[job], names, coords, wg, ch, totalJobs, dump, E0)
 	}
 }
 
@@ -375,24 +406,38 @@ func TotalJobs(nd, ncoords int) (total int) {
 	return
 }
 
-func MakeCheckpoint(fcs2 [][]float64, fcs3, fcs4 []float64, indices ...int) {
-	fc2, _ := json.Marshal(fcs2)
-	ioutil.WriteFile("fc2.json", fc2, 0755)
-	fc3, _ := json.Marshal(fcs3)
-	ioutil.WriteFile("fc3.json", fc3, 0755)
-	fc4, _ := json.Marshal(fcs4)
-	ioutil.WriteFile("fc4.json", fc4, 0755)
-	index := ""
-	for _, i := range indices {
-		index += fmt.Sprintf("%d ", i)
+func MakeCheckpoint() {
+	fc2Json, _ := json.Marshal(fc2Done)
+	ioutil.WriteFile("fc2.json", fc2Json, 0755)
+	fc3Json, _ := json.Marshal(fc3Done)
+	ioutil.WriteFile("fc3.json", fc3Json, 0755)
+	fc4Json, _ := json.Marshal(fc4Done)
+	ioutil.WriteFile("fc4.json", fc4Json, 0755)
+	e2dJson, _ := json.Marshal(e2d)
+	ioutil.WriteFile("e2d.json", e2dJson, 0755)
+}
+
+func ReadCheckpoint() {
+	fc2lines, _ := ioutil.ReadFile("fc2.json")
+	fc3lines, _ := ioutil.ReadFile("fc3.json")
+	fc4lines, _ := ioutil.ReadFile("fc4.json")
+	e2dlines, _ := ioutil.ReadFile("e2d.json")
+	err := json.Unmarshal(fc2lines, &fc2)
+	err = json.Unmarshal(fc2lines, &fc2Done)
+	err = json.Unmarshal(fc3lines, &fc3)
+	err = json.Unmarshal(fc4lines, &fc4)
+	err = json.Unmarshal(e2dlines, &e2d)
+	if err != nil {
+		panic(err)
 	}
-	id, _ := json.Marshal(index)
-	ioutil.WriteFile("id.json", id, 0755)
 }
 
 func SetParams(filename string) (names []string, coords []float64, err error) {
 	err = ErrInputGeomNotFound
 	keymap := ParseInfile(filename)
+
+	// defaults
+
 	for key, value := range keymap {
 		switch key {
 		case ConcJobKey:
@@ -420,9 +465,60 @@ func SetParams(filename string) (names []string, coords []float64, err error) {
 			names, coords = ReadInputXYZ(lines)
 		case DeltaKey:
 			delta, err = strconv.ParseFloat(value, 64)
+		case MethodKey:
+			molproMethod = value
+			mopacMethod = value
+		case BasisKey:
+			basis = value
+		case ChargeKey:
+			charge = value
+		case SpinKey:
+			spin = value
 		}
 	}
 	return
+}
+
+func ParseFlags() []string {
+	flag.BoolVar(&help, "h", false, "list the command line options")
+	flag.BoolVar(&overwrite, "o", false, "overwrite existing inp directory")
+	flag.BoolVar(&checkpoint, "c", false, "resume from checkpoint")
+	flag.Parse()
+	return flag.Args()
+}
+
+/*
+Instead of 3 arrays for each derivative level
+maybe I want to have an array of structs with fields
+Value float64, Count int
+but then have to check them all when marshalling so idk
+probably some other solution that is actually good
+*/
+
+func InitFCArrays(ncoords int) (int, int) {
+	fc2 = make([][]float64, ncoords)
+	fc2Done = make([][]float64, ncoords)
+	fc2Count = make([][]int, ncoords)
+	e2d = make([][]float64, 2*ncoords)
+	for i := 0; i < 2*ncoords; i++ {
+		if i < ncoords {
+			fc2[i] = make([]float64, ncoords)
+			fc2Done[i] = make([]float64, ncoords)
+			fc2Count[i] = make([]int, ncoords)
+		}
+		e2d[i] = make([]float64, 2*ncoords)
+	}
+	natoms := ncoords / 3
+	N3N := natoms * 3 // from spectro manual pg 12
+	other3 := N3N * (N3N + 1) * (N3N + 2) / 6
+	fc3 = make([]float64, other3)
+	fc3Done = make([]float64, other3)
+	fc3Count = make([]int, other3)
+	other4 := N3N * (N3N + 1) * (N3N + 2) * (N3N + 3) / 24
+	fc4 = make([]float64, other4)
+	fc4Done = make([]float64, other4)
+	fc4Count = make([]int, other4)
+	return other3, other4
 }
 
 func main() {
@@ -431,17 +527,26 @@ func main() {
 		names   []string
 		coords  []float64
 		ncoords int
+		natoms  int
 		wg      sync.WaitGroup
 		dump    GarbageHeap
 		err     error
 	)
 
-	switch len(os.Args) {
+	Args := ParseFlags()
+
+	if help {
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
+
+	switch len(Args) {
+	case 0:
+		panic("Input file not found in command line args")
 	case 1:
-		panic("Input geometry not found in command line args")
-	case 2:
-		names, coords, err = SetParams(os.Args[1])
+		names, coords, err = SetParams(Args[0])
 		ncoords = len(coords)
+		natoms = len(names)
 		if err != nil {
 			panic(err)
 		}
@@ -450,66 +555,57 @@ func main() {
 	if _, err := os.Stat("inp/"); os.IsNotExist(err) {
 		os.Mkdir("inp", 0755)
 	} else {
-		os.RemoveAll("inp/")
-		os.Mkdir("inp", 0755)
-	}
-
-	// run reference job
-	// I think I can eliminate the channels and waitgroup here
-	// this is blocking anyway as it's set up
-	c := make(chan float64)
-	wg.Add(1)
-	go RefEnergy(names, coords, &wg, c, &dump)
-	E0 := <-c
-	wg.Wait()
-	close(c)
-
-	// BEGIN InitFCArrays
-	fcs2 := make([][]float64, ncoords)
-	E2D := make([][]float64, 2*ncoords)
-	for i := 0; i < 2*ncoords; i++ {
-		if i < ncoords {
-			fcs2[i] = make([]float64, ncoords)
+		if overwrite {
+			os.RemoveAll("inp/")
+			os.Mkdir("inp", 0755)
+		} else {
+			panic("Directory inp already exists, overwrite with -o")
 		}
-		E2D[i] = make([]float64, 2*ncoords)
 	}
 
-	natoms := len(names)
-	N3N := natoms * 3 // from spectro manual pg 12
-	other3 := N3N * (N3N + 1) * (N3N + 2) / 6
-	fcs3 := make([]float64, other3)
-	other4 := N3N * (N3N + 1) * (N3N + 2) * (N3N + 3) / 24
-	fcs4 := make([]float64, other4)
-	// END InitFCArrays
+	other3, other4 := InitFCArrays(ncoords)
+
+	if checkpoint {
+		ReadCheckpoint()
+	}
+
+	E0 := RefEnergy(names, coords, &dump)
 
 	ch := make(chan int, concRoutines)
 
 	totalJobs := TotalJobs(nDerivative, ncoords)
-	var i, j, k, l int
-	for i = 1; i <= ncoords; i++ {
-		for j = 1; j <= ncoords; j++ {
+	for i := 1; i <= ncoords; i++ {
+		for j := 1; j <= ncoords; j++ {
 			if progress%checkAfter == 0 {
-				MakeCheckpoint(fcs2, fcs3, fcs4, i, j, k, l)
+				MakeCheckpoint()
 			}
-			jobs := Derivative(i, j)
-			Drain(jobs, names, coords, &wg, ch, totalJobs, &dump,
-				fcs2, fcs3, fcs4, E0, E2D)
+			if fc2Done[i-1][j-1] == 0 {
+				jobs := Derivative(i, j)
+				fc2Count[i-1][j-1] = len(jobs)
+				Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, E0)
+			}
 			if nDerivative > 2 && j <= i {
-				for k = 1; k <= j; k++ {
+				for k := 1; k <= j; k++ {
 					if progress%checkAfter == 0 {
-						MakeCheckpoint(fcs2, fcs3, fcs4, i, j, k, l)
+						MakeCheckpoint()
 					}
-					jobs := Derivative(i, j, k)
-					Drain(jobs, names, coords, &wg, ch, totalJobs, &dump,
-						fcs2, fcs3, fcs4, E0, E2D)
+					index := Index3(i, j, k)
+					if fc3Done[index] == 0 {
+						jobs := Derivative(i, j, k)
+						fc3Count[index] = len(jobs)
+						Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, E0)
+					}
 					if nDerivative > 3 {
-						for l = 1; l <= k; l++ {
+						for l := 1; l <= k; l++ {
 							if progress%checkAfter == 0 {
-								MakeCheckpoint(fcs2, fcs3, fcs4, i, j, k, l)
+								MakeCheckpoint()
 							}
-							jobs := Derivative(i, j, k, l)
-							Drain(jobs, names, coords, &wg, ch, totalJobs, &dump,
-								fcs2, fcs3, fcs4, E0, E2D)
+							index := Index4(i, j, k, l)
+							if fc4Done[index] == 0 {
+								jobs := Derivative(i, j, k, l)
+								fc4Count[index] = len(jobs)
+								Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, E0)
+							}
 						}
 					}
 				}
@@ -522,22 +618,22 @@ func main() {
 	// Unit conversion and denominator handling
 	for i := 0; i < ncoords; i++ {
 		for j := 0; j < ncoords; j++ {
-			fcs2[i][j] = fcs2[i][j] * angbohr * angbohr / (4 * delta * delta)
+			fc2[i][j] = fc2[i][j] * angbohr * angbohr / (4 * delta * delta)
 		}
 	}
-	for i, _ := range fcs3 {
-		fcs3[i] = fcs3[i] * angbohr * angbohr * angbohr / (8 * delta * delta * delta)
+	for i, _ := range fc3 {
+		fc3[i] = fc3[i] * angbohr * angbohr * angbohr / (8 * delta * delta * delta)
 	}
-	for i, _ := range fcs4 {
-		fcs4[i] = fcs4[i] * angbohr * angbohr * angbohr * angbohr / (16 * delta * delta * delta * delta)
+	for i, _ := range fc4 {
+		fc4[i] = fc4[i] * angbohr * angbohr * angbohr * angbohr / (16 * delta * delta * delta * delta)
 	}
 
-	PrintFile15(fcs2, natoms)
+	PrintFile15(fc2, natoms)
 	if nDerivative > 2 {
-		PrintFile30(fcs3, natoms, other3)
+		PrintFile30(fc3, natoms, other3)
 	}
 	if nDerivative > 3 {
-		PrintFile40(fcs4, natoms, other4)
+		PrintFile40(fc4, natoms, other4)
 	}
 
 }

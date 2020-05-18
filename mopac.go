@@ -12,7 +12,7 @@ type Mopac struct{}
 
 func (m Mopac) MakeHead() (headLines []string) {
 	return []string{"threads=1 XYZ ANGSTROMS scfcrt=1.D-21 aux(precision=9) " +
-		"external=params.dat 1SCF charge=0 PM6",
+		"external=params.dat 1SCF charge=" + charge + " " + mopacMethod,
 		"MOLECULE # 1", ""}
 }
 

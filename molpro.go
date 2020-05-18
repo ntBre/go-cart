@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-type Molpro struct {}
+type Molpro struct{}
 
 func (m Molpro) MakeHead() []string {
 	return []string{"memory,1125,m",
@@ -20,11 +20,11 @@ func (m Molpro) MakeHead() []string {
 
 func (m Molpro) MakeFoot() []string {
 	return []string{"}",
-		"basis=cc-pVTZ-F12",
-		"set,charge=0",
-		"set,spin",
+		"basis=" + basis,
+		"set,charge=" + charge,
+		"set,spin=" + spin,
 		"hf",
-		"{CCSD(T)-F12}"}
+		"{" + molproMethod + "}"}
 }
 
 func (m Molpro) MakeIn(names []string, coords []float64) []string {
