@@ -65,6 +65,7 @@ func ParseInfile(filename string) map[Key]string {
 	geom := regexp.MustCompile(`(?i)geometry={`)
 	for i := 0; i < len(lines); {
 		if lines[i][0] == '#' {
+			i++
 			continue
 		}
 		if geom.MatchString(lines[i]) {

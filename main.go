@@ -55,16 +55,20 @@ var (
 )
 
 // Shared variables
+// use RWMutex instead of Mutex because concurrent reads are okay
 var (
 	progress            = 1
 	Sig1                = RTMIN
 	brokenFloat         = math.NaN()
 	timeBeforeRetry     = time.Second * 60
 	workers         int = 0
-	fc2Mutex        sync.Mutex
-	fc3Mutex        sync.Mutex
-	fc4Mutex        sync.Mutex
-	e2dMutex        sync.Mutex
+	fc2Mutex        sync.RWMutex
+	fc3Mutex        sync.RWMutex
+	fc4Mutex        sync.RWMutex
+	e2dMutex        sync.RWMutex
+	fc2CountMutex   sync.RWMutex
+	fc3CountMutex   sync.RWMutex
+	fc4CountMutex   sync.RWMutex
 	fc2             [][]float64
 	fc3             []float64
 	fc4             []float64
@@ -152,16 +156,15 @@ func (g *GarbageHeap) Dump() []string {
 }
 
 type Job struct {
-	Coeff    float64
-	Name     string
-	Number   int
-	Sig1     int
-	Steps    []int
-	Index    []int
-	Status   string
-	Retries  int
-	Result   float64
-	Terminal bool
+	Coeff   float64
+	Name    string
+	Number  int
+	Sig1    int
+	Steps   []int
+	Index   []int
+	Status  string
+	Retries int
+	Result  float64
 }
 
 func Step(coords []float64, steps ...int) []float64 {
@@ -263,6 +266,7 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	}
 	switch len(job.Index) {
 	// Locks to prevent concurrent access to the same index
+	// fcDone doesn't need a lock because it's only written once per index
 	case 2:
 		if len(job.Steps) == 2 {
 			e2dx := e2dIndex(job.Steps[0], len(coords))
@@ -281,7 +285,9 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		fc2Mutex.Lock()
 		fc2[x][y] += job.Coeff * job.Result
 		fc2Mutex.Unlock()
+		fc2CountMutex.Lock()
 		fc2Count[x][y]--
+		fc2CountMutex.Unlock()
 		if fc2Count[x][y] == 0 {
 			fc2Done[x][y] = fc2[x][y]
 		}
@@ -291,7 +297,9 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		fc3Mutex.Lock()
 		fc3[index] += job.Coeff * job.Result
 		fc3Mutex.Unlock()
+		fc3CountMutex.Lock()
 		fc3Count[index]--
+		fc3CountMutex.Unlock()
 		if fc3Count[index] == 0 {
 			fc3Done[index] = fc3[index]
 		}
@@ -301,7 +309,9 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		fc4Mutex.Lock()
 		fc4[index] += job.Coeff * job.Result
 		fc4Mutex.Unlock()
+		fc4CountMutex.Lock()
 		fc4Count[index]--
+		fc4CountMutex.Unlock()
 		if fc4Count[index] == 0 {
 			fc4Done[index] = fc4[index]
 		}
