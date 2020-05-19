@@ -36,6 +36,7 @@ var (
 	ErrEnergyNotParsed     = errors.New("Energy not parsed in Molpro output")
 	ErrFinishedButNoEnergy = errors.New("Molpro output finished but no energy found")
 	ErrFileContainsError   = errors.New("Molpro output file contains an error")
+	ErrBlankOutput         = errors.New("Molpro output file exists but is blank")
 	ErrInputGeomNotFound   = errors.New("Geometry not found in input file")
 )
 
@@ -60,7 +61,7 @@ var (
 	progress            = 1
 	Sig1                = RTMIN
 	brokenFloat         = math.NaN()
-	timeBeforeRetry     = time.Second * 60
+	timeBeforeRetry     = time.Second * 15
 	workers         int = 0
 	fc2Mutex        sync.RWMutex
 	fc3Mutex        sync.RWMutex
@@ -247,11 +248,12 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 			}
 			energy, err = Prog.ReadOut(outfile)
 			if err != nil {
-				fmt.Printf("error %s at step %d with %d workers\n", err, progress, workers)
+				fmt.Printf("error %s at step %d with %d workers\n",
+					err, progress, workers)
 				fmt.Println(outfile)
 			}
 			if (err == ErrEnergyNotParsed || err == ErrFinishedButNoEnergy ||
-				err == ErrFileContainsError) ||
+				err == ErrFileContainsError || err == ErrBlankOutput) ||
 				(err == ErrFileNotFound && workers < concRoutines/2) {
 				fmt.Println("resubmitting for", err)
 				Queue.Submit(pbsfile)

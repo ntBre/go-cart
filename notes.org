@@ -5,8 +5,6 @@
     
 * water fourths on eland in 10 minutes!!!
   
-* TODO test skipping comment line in infile.go
-
 * WAIT checkpoint system - resume from incomplete run
   - need to test on thirds and fourths, ideally on eland
   - seconds look good
