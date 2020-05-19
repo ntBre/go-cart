@@ -6,8 +6,9 @@
 * water fourths on eland in 10 minutes!!!
   
 * WAIT checkpoint system - resume from incomplete run
-  - need to test on thirds and fourths, ideally on eland
+  - need to test on fourths, ideally on eland
   - seconds look good
+  - thirds look good
   - Probably a better solution than maintaining 3 of basically the same array but alas
 ** DONE dump checkpoint info
 ** DONE read in checkpoint info and resume

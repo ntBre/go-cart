@@ -62,7 +62,7 @@ func (m Molpro) ReadOut(filename string) (result float64, err error) {
 	// ASSUME blank file is only created when PBS runs
 	// blank file has a single newline
 	if len(lines) == 1 {
-		if strings.Contains(strings.ToUpper(line), "ERROR") {
+		if strings.Contains(strings.ToUpper(lines[0]), "ERROR") {
 			return result, ErrFileContainsError
 		}
 		return result, ErrBlankOutput

@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"math"
-	"os"
-	"reflect"
-	"strconv"
-	"testing"
 	"github.com/google/go-cmp/cmp"
+	"math"
+	"os/exec"
+	"reflect"
+	"testing"
+	"time"
 )
 
 var (
@@ -76,6 +76,14 @@ func TestReadFile(t *testing.T) {
 	}
 }
 
+func TestSplitLine(t *testing.T) {
+	got := SplitLine("H          0.0000000000        0.7574590974        0.5217905143")
+	want := []string{"H", "0.0000000000", "0.7574590974", "0.5217905143"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %s, wanted %v\n", got, want)
+	}
+}
+
 func TestReadInputXYZ(t *testing.T) {
 	want, want2 := testnames, testcoords
 	lines, _ := ReadFile("testfiles/geom.xyz")
@@ -85,148 +93,31 @@ func TestReadInputXYZ(t *testing.T) {
 	}
 }
 
-func TestMakeMolproIn(t *testing.T) {
-	want := []string{
-		"memory,1125,m",
-		"nocompress",
-		"geomtyp=xyz",
-		"angstrom",
-		"geometry={",
-		"H 0.0000000000 0.7574590974 0.5217905143",
-		"O 0.0000000000 0.0000000000 -0.0657441568",
-		"H 0.0000000000 -0.7574590974 0.5217905143",
-		"}",
-		"basis=cc-pVTZ-F12",
-		"set,charge=0",
-		"set,spin",
-		"hf",
-		"{CCSD(T)-F12}"}
-	got := TestProg.MakeIn(testnames, testcoords)
+func TestMakeInput(t *testing.T) {
+	got := MakeInput([]string{"1", "2", "3"},
+		[]string{"7", "8", "9"},
+		[]string{"4", "5", "6"})
+	want := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %#v\nwanted %#v\n", got, want)
+		t.Errorf("got %v, wanted %v\n", got, want)
 	}
 }
 
-func TestWriteMolproIn(t *testing.T) {
-	// this is a terrible test after it has been run once successfully
-	filename := "testfiles/molpro.in"
-	TestProg.WriteIn(filename, testnames, testcoords)
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		t.Errorf("%s does not exist", filename)
-	}
-}
-
-func TestReadMolproOut(t *testing.T) {
-	t.Run("Output file found and energy therein", func(t *testing.T) {
-		filename := "testfiles/molpro.out"
-		got, err := TestProg.ReadOut(filename)
-		want := -76.369839607972
-		if err != nil {
-			t.Errorf("got an error, but didn't want one")
-		} else if got != want {
-			t.Errorf("got %f, wanted %f", got, want)
-		}
-	})
-
-	t.Run("Output file found but no energy therein", func(t *testing.T) {
-		filename := "testfiles/brokenmolpro.out"
-		got, err := TestProg.ReadOut(filename)
-		want := brokenFloat
-		if err == nil {
-			t.Errorf("wanted an error, but didn't get one")
-		} else if !math.IsNaN(got) {
-			t.Errorf("got %f, wanted %f", got, want)
-		}
-	})
-
-	t.Run("No output file found", func(t *testing.T) {
-		filename := "testfiles/molpro1.out"
-		got, err := TestProg.ReadOut(filename)
-		want := brokenFloat
-		if err == nil {
-			t.Errorf("wanted an error, but didn't get one")
-		} else if !math.IsNaN(got) {
-			t.Errorf("got %f, wanted %f", got, want)
-		}
-	})
-}
-
-func TestMakePBS(t *testing.T) {
-	filename := "molpro.in"
-	want := []string{
-		"#!/bin/sh",
-		"#PBS -N go-cart",
-		"#PBS -S /bin/bash",
-		"#PBS -j oe",
-		"#PBS -o /dev/null",
-		"#PBS -W umask=022",
-		"#PBS -l walltime=00:30:00",
-		"#PBS -l ncpus=1",
-		"#PBS -l mem=9gb",
-		"module load intel",
-		"module load mvapich2",
-		"module load pbspro",
-		"export PATH=/usr/local/apps/molpro/2015.1.35/bin:$PATH",
-		"export WORKDIR=$PBS_O_WORKDIR",
-		"export TMPDIR=/tmp/$USER/$PBS_JOBID",
-		"cd $WORKDIR",
-		"mkdir -p $TMPDIR",
-		"date",
-		"molpro -t 1 molpro.in",
-		"ssh -t maple pkill -35 go-cart",
-		"rm test1*\nrm test2*\nrm test3*",
-		"rm -rf $TMPDIR"}
-	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
-	got := P.Make(filename, 35, &tdump)
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %#v, wanted %#v", got, want)
-	}
-}
-
-func TestWritePBS(t *testing.T) {
-	// this is a terrible test after it has been run once successfully
-	filename := "testfiles/molpro.pbs"
-	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
-	P.Write(filename, "molpro.in", 35, &tdump)
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		t.Errorf("%s does not exist", filename)
-	}
-}
-
-func TestQsubmit(t *testing.T) {
-	filename := "testfiles/molpro.pbs"
-	got := P.Submit(filename)
-	want := 775241
+func TestBasename(t *testing.T) {
+	got := Basename("/home/brent/Projects/go-cart/go-cart.exe")
+	want := "go-cart"
 	if got != want {
-		t.Errorf("got %d, wanted %d", got, want)
+		t.Errorf("got %s, wanted %s\n", got, want)
 	}
 }
 
-func TestDerivative(t *testing.T) {
-	t.Run("Diagonal second derivative", func(t *testing.T) {
-		got := Derivative(1, 1)[0]
-		want := Job{1, "untestedName", 0, 0, []int{1, 1}, []int{1, 1}, "queued", 0, 0, false}
-		if want.Coeff != got.Coeff ||
-			!reflect.DeepEqual(want.Steps, got.Steps) ||
-			want.Status != got.Status ||
-			want.Retries != got.Retries ||
-			want.Result != got.Result {
-			fmt.Println(want.Steps, got.Steps)
-			t.Errorf("got %#v, wanted %#v", got, want)
-		}
-	})
-	t.Run("Off-diagonal second derivative", func(t *testing.T) {
-		got := Derivative(1, 2)[0]
-		want := Job{1, "untestedName", 0, 0, []int{1, 2}, []int{1, 2}, "queued", 0, 0, false}
-		if want.Coeff != got.Coeff ||
-			!reflect.DeepEqual(want.Steps, got.Steps) ||
-			want.Status != got.Status ||
-			want.Retries != got.Retries ||
-			want.Result != got.Result {
-			fmt.Println(want.Steps, got.Steps)
-			t.Errorf("got %#v, wanted %#v", got, want)
-		}
-	})
+func TestDump(t *testing.T) {
+	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
+	got := tdump.Dump()
+	want := []string{"rm test1*", "rm test2*", "rm test3*"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, wanted %v", got, want)
+	}
 }
 
 func TestStep(t *testing.T) {
@@ -286,73 +177,185 @@ func TestHashName(t *testing.T) {
 	}
 }
 
+func TestE2dIndex(t *testing.T) {
+	t.Run("positive number", func(t *testing.T) {
+		got := E2dIndex(2, 9)
+		want := 1
+		if got != want {
+			t.Errorf("got %d, wanted %d\n", got, want)
+		}
+	})
+	t.Run("negative number", func(t *testing.T) {
+		got := E2dIndex(-2, 9)
+		want := 10
+		if got != want {
+			t.Errorf("got %d, wanted %d\n", got, want)
+		}
+	})
+}
+
+func TestIndex3(t *testing.T) {
+	got := Index3(9, 9, 9)
+	want := 164
+	if got != want {
+		t.Errorf("got %d, wanted %d\n", got, want)
+	}
+}
+
+func TestIndex4(t *testing.T) {
+	got := Index4(9, 9, 9, 9)
+	want := 494
+	if got != want {
+		t.Errorf("got %d, wanted %d\n", got, want)
+	}
+}
+
+func TestHandleSignal(t *testing.T) {
+	t.Run("received signal", func(t *testing.T) {
+		c := make(chan error)
+		go func(c chan error) {
+			err := HandleSignal(35, 5*time.Second)
+			c <- err
+		}(c)
+		exec.Command("pkill", "-35", "go-cart").Run()
+		err := <-c
+		if err != nil {
+			t.Errorf("did not receive signal")
+		}
+	})
+	t.Run("no signal", func(t *testing.T) {
+		c := make(chan error)
+		go func(c chan error) {
+			err := HandleSignal(35, 50*time.Millisecond)
+			c <- err
+		}(c)
+		exec.Command("pkill", "-34", "go-cart").Run()
+		err := <-c
+		if err == nil {
+			t.Errorf("received signal and didn't want one")
+		}
+	})
+}
+
+func TestDerivative(t *testing.T) {
+	t.Run("Diagonal second derivative", func(t *testing.T) {
+		got := Derivative(1, 1)[0]
+		want := Job{1, "untestedName", 0, 0, []int{1, 1}, []int{1, 1}, "queued", 0, 0}
+		if want.Coeff != got.Coeff ||
+			!reflect.DeepEqual(want.Steps, got.Steps) ||
+			want.Status != got.Status ||
+			want.Retries != got.Retries ||
+			want.Result != got.Result {
+			fmt.Println(want.Steps, got.Steps)
+			t.Errorf("got %#v, wanted %#v", got, want)
+		}
+	})
+	t.Run("Off-diagonal second derivative", func(t *testing.T) {
+		got := Derivative(1, 2)[0]
+		want := Job{1, "untestedName", 0, 0, []int{1, 2}, []int{1, 2}, "queued", 0, 0}
+		if want.Coeff != got.Coeff ||
+			!reflect.DeepEqual(want.Steps, got.Steps) ||
+			want.Status != got.Status ||
+			want.Retries != got.Retries ||
+			want.Result != got.Result {
+			fmt.Println(want.Steps, got.Steps)
+			t.Errorf("got %#v, wanted %#v", got, want)
+		}
+	})
+}
+
 func TestPrintFile15(t *testing.T) {
-	// PrintFile15(testinp)
+	fc2test := [][]float64{
+		[]float64{1, 2, 3},
+		[]float64{4, 5, 6},
+	}
+	got := PrintFile15(fc2test, 3, "testfiles/fort.15")
+	want := 6
+	if got != want {
+		t.Errorf("not the right length, watch out")
+	}
 }
 
 func TestPrintFile30(t *testing.T) {
-	// PrintFile30(testinp30)
+	fc3test := []float64{1, 2, 3, 4, 5, 6}
+	got := PrintFile30(fc3test, 3, 165, "testfiles/fort.30")
+	want := 6
+	if got != want {
+		t.Errorf("not the right length, watch out")
+	}
 }
 
 func TestPrintFile40(t *testing.T) {
-	// PrintFile40(testinp40)
-}
-
-func TestCentral(t *testing.T) {
-	t.Run("Diagonal second derivative", func(t *testing.T) {
-		want := "+1f(2Dx)-2f(0Dx)+1f(-2Dx)"
-		got := Central(2, "x")
-		if got != want {
-			t.Errorf("got %s, wanted %s\n", got, want)
-		}
-	})
-	t.Run("Diagonal third derivative", func(t *testing.T) {
-		want := "+1f(3Dx)-3f(1Dx)+3f(-1Dx)-1f(-3Dx)"
-		got := Central(3, "x")
-		if got != want {
-			t.Errorf("got %s, wanted %s\n", got, want)
-		}
-	})
-	t.Run("Diagonal fourth derivative", func(t *testing.T) {
-		want := "+1f(4Dx)-4f(2Dx)+6f(0Dx)-4f(-2Dx)+1f(-4Dx)"
-		got := Central(4, "x")
-		if got != want {
-			t.Errorf("got %s, wanted %s\n", got, want)
-		}
-	})
-}
-
-func TestDump(t *testing.T) {
-	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
-	got := tdump.Dump()
-	want := []string{"rm test1*", "rm test2*", "rm test3*"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, wanted %v", got, want)
+	fc4test := []float64{1, 2, 3, 4, 5, 6}
+	got := PrintFile40(fc4test, 3, 495, "testfiles/fort.40")
+	want := 6
+	if got != want {
+		t.Errorf("not the right length, watch out")
 	}
 }
 
-func TestMakePBSFoot(t *testing.T) {
-	num := strconv.Itoa(5)
-	want := []string{"ssh -t maple pkill -" + num + " " + "go-cart",
-		"rm test1*\nrm test2*\nrm test3*",
-		"rm -rf $TMPDIR"}
-	tdump := GarbageHeap{Heap: []string{"test1", "test2", "test3"}}
-	got := P.MakeFoot(5, &tdump)
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %#v, wanted %#v", got, want)
-	}
+func TestIntAbs(t *testing.T) {
+	t.Run("negative number", func(t *testing.T) {
+		got := IntAbs(-2)
+		want := 2
+		if got != want {
+			t.Errorf("got %d, wanted %d\n", got, want)
+		}
+	})
+	t.Run("positive number", func(t *testing.T) {
+		got := IntAbs(2)
+		want := 2
+		if got != want {
+			t.Errorf("got %d, wanted %d\n", got, want)
+		}
+	})
+	t.Run("zero", func(t *testing.T) {
+		got := IntAbs(0)
+		want := 0
+		if got != want {
+			t.Errorf("got %d, wanted %d\n", got, want)
+		}
+	})
 }
+
+func TestTotalJobs(t *testing.T) {
+	t.Run("2nd derivative, water", func(t *testing.T) {
+		got := TotalJobs(2, 9)
+		want := 315
+		if got != want {
+			t.Errorf("got %d, wanted %d\n", got, want)
+		}
+	})
+	t.Run("3rd derivative, water", func(t *testing.T) {
+		got := TotalJobs(3, 9)
+		want := 1455
+		if got != want {
+			t.Errorf("got %d, wanted %d\n", got, want)
+		}
+	})
+	t.Run("4th derivative, water", func(t *testing.T) {
+		got := TotalJobs(4, 9)
+		want := 7440
+		if got != want {
+			t.Errorf("got %d, wanted %d\n", got, want)
+		}
+	})
+}
+
+// TODO Make/ReadCheckpoint
 
 func TestSetParams(t *testing.T) {
 	wantBefore := concRoutines == 5 && nDerivative == 4 && Queue == PBS{} &&
-		checkAfter== 100 && Prog==Molpro{} &&delta==0.005
+		checkAfter == 100 && Prog == Molpro{} && delta == 0.005
 	if !wantBefore {
 		t.Errorf("something wrong to start")
 	}
 	SetParams("sample.in")
 	wantAfter := concRoutines == 9 && nDerivative == 2 && Queue == Slurm{} &&
-		checkAfter== 120 && Prog==Mopac{} &&delta==0.010
+		checkAfter == 120 && Prog == Mopac{} && delta == 0.010
 	if !wantAfter {
 		t.Error("something wrong after SetParams", concRoutines, nDerivative, Queue, checkAfter, Prog, delta)
 	}
 }
+
+// TODO InitFCArrays

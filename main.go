@@ -29,6 +29,12 @@ const (
 	RTMAX            = 64
 )
 
+var (
+	fc2Scale = angbohr * angbohr / (4 * delta * delta)
+	fc3Scale = angbohr * angbohr * angbohr / (8 * delta * delta * delta)
+	fc4Scale = angbohr * angbohr * angbohr * angbohr / (16 * delta * delta * delta * delta)
+)
+
 // Error messages
 var (
 	ErrEnergyNotFound      = errors.New("Energy not found in Molpro output")
@@ -38,6 +44,7 @@ var (
 	ErrFileContainsError   = errors.New("Molpro output file contains an error")
 	ErrBlankOutput         = errors.New("Molpro output file exists but is blank")
 	ErrInputGeomNotFound   = errors.New("Geometry not found in input file")
+	ErrTimeout             = errors.New("Timeout waiting for signal")
 )
 
 // Input parameters with default values
@@ -163,8 +170,8 @@ type Job struct {
 	Sig1    int
 	Steps   []int
 	Index   []int
-	Status  string
-	Retries int
+	Status  string // not used
+	Retries int    // not used
 	Result  float64
 }
 
@@ -188,7 +195,7 @@ func HashName() string {
 	return "job" + strconv.FormatUint(h.Sum64(), 16)
 }
 
-func e2dIndex(n, ncoords int) int {
+func E2dIndex(n, ncoords int) int {
 	if n < 0 {
 		return IntAbs(n) + ncoords - 1
 	}
@@ -203,6 +210,22 @@ func Index4(x, y, z, w int) int {
 	return x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24 - 1
 }
 
+func HandleSignal(sig int, timeout time.Duration) error {
+	sigChan := make(chan os.Signal, 1)
+	sig1Want := os.Signal(syscall.Signal(sig))
+	signal.Notify(sigChan, sig1Want)
+	select {
+	// either receive signal
+	case <-sigChan:
+		fmt.Println("got signal ", sig1Want, " for step ", progress)
+		return nil
+	// or timeout after and retry
+	case <-time.After(timeout):
+		fmt.Println("didn't get signal, waiting on step ", progress)
+		return ErrTimeout
+	}
+}
+
 func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	ch chan int, totalJobs int, dump *GarbageHeap, E0 float64) {
 
@@ -212,8 +235,8 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		job.Status = "done"
 		job.Result = E0
 	case len(job.Steps) == 2:
-		x := e2dIndex(job.Steps[0], len(coords))
-		y := e2dIndex(job.Steps[1], len(coords))
+		x := E2dIndex(job.Steps[0], len(coords))
+		y := E2dIndex(job.Steps[1], len(coords))
 		if x > y {
 			temp := x
 			x = y
@@ -235,17 +258,7 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		job.Number = Queue.Submit(pbsfile)
 		energy, err := Prog.ReadOut(outfile)
 		for err != nil {
-			sigChan := make(chan os.Signal, 1)
-			sig1Want := os.Signal(syscall.Signal(job.Sig1))
-			signal.Notify(sigChan, sig1Want)
-			select {
-			// either receive signal
-			case <-sigChan:
-				// or timeout after and retry
-				fmt.Println("got signal ", sig1Want, " for step ", progress)
-			case <-time.After(timeBeforeRetry):
-				fmt.Println("didn't get signal, waiting on step ", progress)
-			}
+			HandleSignal(job.Sig1, timeBeforeRetry)
 			energy, err = Prog.ReadOut(outfile)
 			if err != nil {
 				fmt.Printf("error %s at step %d with %d workers\n",
@@ -266,13 +279,15 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		job.Result = energy
 		dump.Heap = append(dump.Heap, "inp/"+Basename(molprofile))
 	}
+	// TODO should test something in here/DRY it up
+	// looks repetitive but not immediately clear how to fix
 	switch len(job.Index) {
 	// Locks to prevent concurrent access to the same index
 	// fcDone doesn't need a lock because it's only written once per index
 	case 2:
 		if len(job.Steps) == 2 {
-			e2dx := e2dIndex(job.Steps[0], len(coords))
-			e2dy := e2dIndex(job.Steps[1], len(coords))
+			e2dx := E2dIndex(job.Steps[0], len(coords))
+			e2dy := E2dIndex(job.Steps[1], len(coords))
 			if e2dx > e2dy {
 				temp := e2dx
 				e2dx = e2dy
@@ -321,6 +336,9 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", progress, totalJobs,
 		100*float64(progress)/float64(totalJobs))
 	progress++
+	if checkAfter > 0 && progress%checkAfter == 0 {
+		MakeCheckpoint()
+	}
 	workers--
 	<-ch
 }
@@ -334,40 +352,45 @@ func RefEnergy(names []string, coords []float64, dump *GarbageHeap) (energy floa
 	Queue.Submit(pbsfile)
 	energy, err := Prog.ReadOut(outfile)
 	for err != nil {
-		time.Sleep(time.Second)
+		HandleSignal(35, time.Second)
 		energy, err = Prog.ReadOut(outfile)
 	}
 	dump.Heap = append(dump.Heap, "inp/"+Basename(molprofile))
 	return
 }
 
-func PrintFile15(fc [][]float64, natoms int) int {
-	f, _ := os.Create("fort.15")
+func PrintFile15(fc [][]float64, natoms int, filename string) int {
+	f, _ := os.Create(filename)
 	fmt.Fprintf(f, "%5d%5d\n", natoms, 6*natoms) // still not sure why this is just times 6
 	flat := make([]float64, 0)
 	for _, v := range fc {
 		flat = append(flat, v...)
 	}
 	for i := 0; i < len(flat); i += 3 {
-		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n", flat[i], flat[i+1], flat[i+2])
+		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n",
+			flat[i]*fc2Scale, flat[i+1]*fc2Scale, flat[i+2]*fc2Scale)
 	}
 	return len(flat)
 }
 
-func PrintFile30(fc []float64, natoms, other int) {
-	f, _ := os.Create("fort.30")
+func PrintFile30(fc []float64, natoms, other int, filename string) int {
+	f, _ := os.Create(filename)
 	fmt.Fprintf(f, "%5d%5d\n", natoms, other)
 	for i := 0; i < len(fc); i += 3 {
-		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n", fc[i], fc[i+1], fc[i+2])
+		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n",
+			fc[i]*fc3Scale, fc[i+1]*fc3Scale, fc[i+2]*fc3Scale)
 	}
+	return len(fc)
 }
 
-func PrintFile40(fc []float64, natoms, other int) {
-	f, _ := os.Create("fort.40")
+func PrintFile40(fc []float64, natoms, other int, filename string) int {
+	f, _ := os.Create(filename)
 	fmt.Fprintf(f, "%5d%5d\n", natoms, other)
 	for i := 0; i < len(fc); i += 3 {
-		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n", fc[i], fc[i+1], fc[i+2])
+		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n",
+			fc[i]*fc4Scale, fc[i+1]*fc4Scale, fc[i+2]*fc4Scale)
 	}
+	return len(fc)
 }
 
 func IntAbs(n int) int {
@@ -435,9 +458,12 @@ func ReadCheckpoint() {
 	fc4lines, _ := ioutil.ReadFile("fc4.json")
 	e2dlines, _ := ioutil.ReadFile("e2d.json")
 	err := json.Unmarshal(fc2lines, &fc2)
-	err = json.Unmarshal(fc2lines, &fc2Done)
 	err = json.Unmarshal(fc3lines, &fc3)
 	err = json.Unmarshal(fc4lines, &fc4)
+	// also put back into *Done for check in main
+	err = json.Unmarshal(fc2lines, &fc2Done)
+	err = json.Unmarshal(fc3lines, &fc3Done)
+	err = json.Unmarshal(fc4lines, &fc4Done)
 	err = json.Unmarshal(e2dlines, &e2d)
 	if err != nil {
 		panic(err)
@@ -588,9 +614,6 @@ func main() {
 	totalJobs := TotalJobs(nDerivative, ncoords)
 	for i := 1; i <= ncoords; i++ {
 		for j := 1; j <= ncoords; j++ {
-			if progress%checkAfter == 0 {
-				MakeCheckpoint()
-			}
 			if fc2Done[i-1][j-1] == 0 {
 				jobs := Derivative(i, j)
 				fc2Count[i-1][j-1] = len(jobs)
@@ -598,10 +621,10 @@ func main() {
 			}
 			if nDerivative > 2 && j <= i {
 				for k := 1; k <= j; k++ {
-					if progress%checkAfter == 0 {
-						MakeCheckpoint()
-					}
-					index := Index3(i, j, k)
+					// Index3/4 require arguments to be sorted
+					temp := []int{i, j, k}
+					sort.Ints(temp)
+					index := Index3(temp[0], temp[1], temp[2])
 					if fc3Done[index] == 0 {
 						jobs := Derivative(i, j, k)
 						fc3Count[index] = len(jobs)
@@ -609,10 +632,9 @@ func main() {
 					}
 					if nDerivative > 3 {
 						for l := 1; l <= k; l++ {
-							if progress%checkAfter == 0 {
-								MakeCheckpoint()
-							}
-							index := Index4(i, j, k, l)
+							temp := []int{i, j, k, l}
+							sort.Ints(temp)
+							index := Index4(temp[0], temp[1], temp[2], temp[3])
 							if fc4Done[index] == 0 {
 								jobs := Derivative(i, j, k, l)
 								fc4Count[index] = len(jobs)
@@ -627,25 +649,12 @@ func main() {
 
 	wg.Wait()
 
-	// Unit conversion and denominator handling
-	for i := 0; i < ncoords; i++ {
-		for j := 0; j < ncoords; j++ {
-			fc2[i][j] = fc2[i][j] * angbohr * angbohr / (4 * delta * delta)
-		}
-	}
-	for i, _ := range fc3 {
-		fc3[i] = fc3[i] * angbohr * angbohr * angbohr / (8 * delta * delta * delta)
-	}
-	for i, _ := range fc4 {
-		fc4[i] = fc4[i] * angbohr * angbohr * angbohr * angbohr / (16 * delta * delta * delta * delta)
-	}
-
-	PrintFile15(fc2, natoms)
+	PrintFile15(fc2, natoms, "fort.15")
 	if nDerivative > 2 {
-		PrintFile30(fc3, natoms, other3)
+		PrintFile30(fc3, natoms, other3, "fort.30")
 	}
 	if nDerivative > 3 {
-		PrintFile40(fc4, natoms, other4)
+		PrintFile40(fc4, natoms, other4, "fort.40")
 	}
 
 }
