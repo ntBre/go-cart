@@ -4,17 +4,11 @@
 * bh3nh3 started at 14:31 13 May 2020
     
 * water fourths on eland in 10 minutes!!!
+* 2h6m on maple lol
   
-* WAIT checkpoint system - resume from incomplete run
-  - need to test on fourths, ideally on eland
-  - seconds look good
-  - thirds look good
-  - Probably a better solution than maintaining 3 of basically the same array but alas
-** DONE dump checkpoint info
-** DONE read in checkpoint info and resume
-
-
-* WAIT input file with
+* TODO update progress correctly if resuming from checkpoint
+  
+* TODO input file with
 ** DONE geometry
 ** DONE number of concurrent jobs
 ** DONE when to write checkpoints
@@ -23,18 +17,18 @@
    - basis set
    - charge
    - spin
-** WAIT mopac job information - untested, waiting on eland
+** TODO mopac job information - untested, waiting on eland
    - method
    - charge
-** WAIT follow Psi4 input style
+** follow Psi4 input style
    - not doing this for now
     
-* WAIT add mopac i/o - waiting on eland
+* TODO add mopac i/o - waiting on eland
 ** DONE read inputs:
 *** DONE equilibrium geometry - same as molpro, xyz file
 *** DONE parameters
     - just link to params file - params.dat hard coded
-** WAIT write input files - need to test
+** TODO write input files - need to test
 ** TODO read output files
 
 * TODO general refactoring
@@ -46,6 +40,13 @@
 
 * TODO investigate alternate calculation schemes to minimize floating point error
   - Library/Floats.pdf
+
+* DONE checkpoint system - resume from incomplete run
+  - tested at least from the last written checkpoint at all dlevels
+  - Probably a better solution than maintaining 3 of basically the same array but alas
+** DONE dump checkpoint info
+** DONE read in checkpoint info and resume
+
 
 * DONE take command line flags
   - c continue from checkpoint

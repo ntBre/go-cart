@@ -361,34 +361,40 @@ func RefEnergy(names []string, coords []float64, dump *GarbageHeap) (energy floa
 
 func PrintFile15(fc [][]float64, natoms int, filename string) int {
 	f, _ := os.Create(filename)
-	fmt.Fprintf(f, "%5d%5d\n", natoms, 6*natoms) // still not sure why this is just times 6
+	fmt.Fprintf(f, "%5d%5d", natoms, 6*natoms) // still not sure why this is just times 6
 	flat := make([]float64, 0)
 	for _, v := range fc {
 		flat = append(flat, v...)
 	}
-	for i := 0; i < len(flat); i += 3 {
-		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n",
-			flat[i]*fc2Scale, flat[i+1]*fc2Scale, flat[i+2]*fc2Scale)
+	for i := range flat {
+		if i % 3 == 0 {
+			fmt.Fprintf(f, "\n")
+		}
+		fmt.Fprintf(f, "%20.10f", flat[i]*fc2Scale)
 	}
 	return len(flat)
 }
 
 func PrintFile30(fc []float64, natoms, other int, filename string) int {
 	f, _ := os.Create(filename)
-	fmt.Fprintf(f, "%5d%5d\n", natoms, other)
-	for i := 0; i < len(fc); i += 3 {
-		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n",
-			fc[i]*fc3Scale, fc[i+1]*fc3Scale, fc[i+2]*fc3Scale)
+	fmt.Fprintf(f, "%5d%5d", natoms, other)
+	for i := range fc {
+		if i % 3 == 0 {
+			fmt.Fprintf(f, "\n")
+		}
+		fmt.Fprintf(f, "%20.10f", fc[i]*fc3Scale)
 	}
 	return len(fc)
 }
 
 func PrintFile40(fc []float64, natoms, other int, filename string) int {
 	f, _ := os.Create(filename)
-	fmt.Fprintf(f, "%5d%5d\n", natoms, other)
-	for i := 0; i < len(fc); i += 3 {
-		fmt.Fprintf(f, "%20.10f%20.10f%20.10f\n",
-			fc[i]*fc4Scale, fc[i+1]*fc4Scale, fc[i+2]*fc4Scale)
+	fmt.Fprintf(f, "%5d%5d", natoms, other)
+	for i := range fc {
+		if i % 3 == 0 {
+			fmt.Fprintf(f, "\n")
+		}
+		fmt.Fprintf(f, "%20.10f", fc[i]*fc4Scale)
 	}
 	return len(fc)
 }
@@ -629,7 +635,7 @@ func main() {
 						jobs := Derivative(i, j, k)
 						fc3Count[index] = len(jobs)
 						Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, E0)
-					}
+					} // else should increment progress and print for checkpoints
 					if nDerivative > 3 {
 						for l := 1; l <= k; l++ {
 							temp := []int{i, j, k, l}
