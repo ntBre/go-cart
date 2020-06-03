@@ -9,6 +9,6 @@ H 0.0000000000 -0.7574590974 0.5217905143
 }
 basis=cc-pVTZ-F12
 set,charge=0
-set,spin=1
+set,spin=0
 hf
 {CCSD(T)-F12}

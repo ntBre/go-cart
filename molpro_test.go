@@ -20,7 +20,7 @@ func TestMakeMolproIn(t *testing.T) {
 		"}",
 		"basis=cc-pVTZ-F12",
 		"set,charge=0",
-		"set,spin=1",
+		"set,spin=0",
 		"hf",
 		"{CCSD(T)-F12}"}
 	got := TestProg.MakeIn(testnames, testcoords)

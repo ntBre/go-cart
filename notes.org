@@ -2,6 +2,7 @@
   - go-cart <input file>
     
 * bh3nh3 started at 14:31 13 May 2020
+  - going to crash because of third output file not divisible by 3
     
 * water fourths on eland in 10 minutes!!!
 * 2h6m on maple lol

@@ -21,7 +21,6 @@ import (
 )
 
 const (
-	energyLine       = "energy="
 	molproTerminated = "Molpro calculation terminated"
 	angbohr          = 0.529177249
 	progName         = "go-cart"
@@ -59,7 +58,8 @@ var (
 	mopacMethod  string     = "PM6"
 	basis        string     = "cc-pVTZ-F12"
 	charge       string     = "0"
-	spin         string     = "1"
+	spin         string     = "0"
+	energyLine              = "energy="
 )
 
 // Shared variables
@@ -367,7 +367,7 @@ func PrintFile15(fc [][]float64, natoms int, filename string) int {
 		flat = append(flat, v...)
 	}
 	for i := range flat {
-		if i % 3 == 0 {
+		if i%3 == 0 {
 			fmt.Fprintf(f, "\n")
 		}
 		fmt.Fprintf(f, "%20.10f", flat[i]*fc2Scale)
@@ -379,7 +379,7 @@ func PrintFile30(fc []float64, natoms, other int, filename string) int {
 	f, _ := os.Create(filename)
 	fmt.Fprintf(f, "%5d%5d", natoms, other)
 	for i := range fc {
-		if i % 3 == 0 {
+		if i%3 == 0 {
 			fmt.Fprintf(f, "\n")
 		}
 		fmt.Fprintf(f, "%20.10f", fc[i]*fc3Scale)
@@ -391,7 +391,7 @@ func PrintFile40(fc []float64, natoms, other int, filename string) int {
 	f, _ := os.Create(filename)
 	fmt.Fprintf(f, "%5d%5d", natoms, other)
 	for i := range fc {
-		if i % 3 == 0 {
+		if i%3 == 0 {
 			fmt.Fprintf(f, "\n")
 		}
 		fmt.Fprintf(f, "%20.10f", fc[i]*fc4Scale)
@@ -503,6 +503,9 @@ func SetParams(filename string) (names []string, coords []float64, err error) {
 				Prog = Mopac{}
 			case "MOLPRO":
 				Prog = Molpro{}
+			case "CCCR":
+				Prog = CcCR{}
+				energyLine = "SETTING CCCRE"
 			}
 		case GeomKey:
 			lines := strings.Split(value, "\n")
