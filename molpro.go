@@ -12,6 +12,7 @@ type Molpro struct{}
 
 func (m Molpro) MakeHead() []string {
 	return []string{"memory,1125,m",
+		"gthresh,energy=1.d-10,zero=1.d-16,oneint=1.d-16,twoint=1.d-16;",
 		"nocompress",
 		"geomtyp=xyz",
 		"angstrom",
@@ -23,8 +24,8 @@ func (m Molpro) MakeFoot() []string {
 		"basis=" + basis,
 		"set,charge=" + charge,
 		"set,spin=" + spin,
-		"hf",
-		"{" + molproMethod + "}"}
+		"hf,accuracy=16,energy=1.0d-10",
+		"{" + molproMethod + ",thrden=1.0d-8,thrvar=1.0d-10}"}
 }
 
 func (m Molpro) MakeIn(names []string, coords []float64) []string {

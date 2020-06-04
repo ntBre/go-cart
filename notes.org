@@ -8,6 +8,10 @@
 * 2h6m on maple lol
   
 * TODO update progress correctly if resuming from checkpoint
+
+* TODO figure out why Jax's first run didn't work
+  - many jobs crashed at once and then nothing would budge
+  - maybe check age of the output file and resubmit if too long since written to
   
 * TODO input file with
 ** DONE geometry
