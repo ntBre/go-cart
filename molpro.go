@@ -66,6 +66,10 @@ func (m Molpro) ReadOut(filename string) (result float64, err error) {
 		if strings.Contains(strings.ToUpper(lines[0]), "ERROR") {
 			return result, ErrFileContainsError
 		}
+		// Jax failsafe
+		if strings.Contains(strings.ToUpper(lines[0]), "PANIC") {
+			panic("Panic triggered by panic in output")
+		}
 		return result, ErrBlankOutput
 	}
 	for _, line := range lines {
