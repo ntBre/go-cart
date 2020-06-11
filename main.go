@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash/maphash"
 	"io/ioutil"
+	"log"
 	"math"
 	"os"
 	"os/signal"
@@ -35,31 +36,35 @@ var (
 )
 
 // Error messages
+// Error messages should be lowercase without punctuation.
+// Not really important or impactful tbh.
 var (
-	ErrEnergyNotFound      = errors.New("Energy not found in Molpro output")
-	ErrFileNotFound        = errors.New("Molpro output file not found")
-	ErrEnergyNotParsed     = errors.New("Energy not parsed in Molpro output")
-	ErrFinishedButNoEnergy = errors.New("Molpro output finished but no energy found")
-	ErrFileContainsError   = errors.New("Molpro output file contains an error")
-	ErrBlankOutput         = errors.New("Molpro output file exists but is blank")
-	ErrInputGeomNotFound   = errors.New("Geometry not found in input file")
-	ErrTimeout             = errors.New("Timeout waiting for signal")
+	ErrEnergyNotFound      = errors.New("energy not found in Molpro output")
+	ErrFileNotFound        = errors.New("molpro output file not found")
+	ErrEnergyNotParsed     = errors.New("energy not parsed in Molpro output")
+	ErrFinishedButNoEnergy = errors.New("molpro output finished but no energy found")
+	ErrFileContainsError   = errors.New("molpro output file contains an error")
+	ErrBlankOutput         = errors.New("molpro output file exists but is blank")
+	ErrInputGeomNotFound   = errors.New("geometry not found in input file")
+	ErrTimeout             = errors.New("timeout waiting for signal")
+	ErrFprintf			   = errors.New("fprinf failed")
 )
 
 // Input parameters with default values
+// Some of these didn't need the explicit typing. And I organized them alphabetically.
 var (
-	concRoutines int        = 5
-	nDerivative  int        = 4
-	Queue        Submission = PBS{}
-	checkAfter   int        = 100
-	Prog         Program    = Molpro{}
-	delta        float64    = 0.005
-	molproMethod string     = "CCSD(T)-F12"
-	mopacMethod  string     = "PM6"
-	basis        string     = "cc-pVTZ-F12"
-	charge       string     = "0"
-	spin         string     = "0"
-	energyLine              = "energy="
+	basis					=	"cc-pVTZ-F12"
+	charge					=	"0"
+	checkAfter				=	100
+	concRoutines			=	5
+	delta					=	0.005
+	energyLine				=	"energy="
+	molproMethod			=	"CCSD(T)-F12"
+	mopacMethod				=	"PM6"
+	nDerivative				=	4
+	Prog		Program		=	Molpro{}
+	Queue		Submission	=	PBS{}
+	spin					=	"0"
 )
 
 // Shared variables
@@ -69,7 +74,7 @@ var (
 	Sig1                = RTMIN
 	brokenFloat         = math.NaN()
 	timeBeforeRetry     = time.Second * 15
-	workers         int = 0
+	workers         = 0
 	fc2Mutex        sync.RWMutex
 	fc3Mutex        sync.RWMutex
 	fc4Mutex        sync.RWMutex
@@ -84,7 +89,7 @@ var (
 	fc2Done         [][]float64
 	fc3Done         []float64
 	fc4Done         []float64
-	e2dDone         [][]float64
+//	e2dDone         [][]float64
 	fc2Count        [][]int
 	fc3Count        []int
 	fc4Count        []int
@@ -258,9 +263,9 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 		job.Number = Queue.Submit(pbsfile)
 		energy, err := Prog.ReadOut(outfile)
 		for err != nil {
-			HandleSignal(job.Sig1, timeBeforeRetry)
+			handleError := HandleSignal(job.Sig1, timeBeforeRetry)
 			energy, err = Prog.ReadOut(outfile)
-			if err != nil {
+			if err != nil || handleError != nil {
 				fmt.Printf("error %s at step %d with %d workers\n",
 					err, progress, workers)
 				fmt.Println(outfile)
@@ -271,9 +276,6 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 				fmt.Println("resubmitting for", err)
 				Queue.Submit(pbsfile)
 			}
-		}
-		if err != nil {
-			panic(err)
 		}
 		job.Status = "done"
 		job.Result = energy
@@ -333,8 +335,11 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 			fc4Done[index] = fc4[index]
 		}
 	}
-	fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", progress, totalJobs,
+	_, err := fmt.Fprintf(os.Stderr, "%d/%d jobs completed (%.1f%%)\n", progress, totalJobs,
 		100*float64(progress)/float64(totalJobs))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Fprintf: %v\n", ErrFprintf)
+	}
 	progress++
 	if checkAfter > 0 && progress%checkAfter == 0 {
 		MakeCheckpoint()
@@ -352,8 +357,11 @@ func RefEnergy(names []string, coords []float64, dump *GarbageHeap) (energy floa
 	Queue.Submit(pbsfile)
 	energy, err := Prog.ReadOut(outfile)
 	for err != nil {
-		HandleSignal(35, time.Second)
+		handleError := HandleSignal(35, time.Second)
 		energy, err = Prog.ReadOut(outfile)
+		if handleError != nil {
+			println(ErrTimeout)
+		}
 	}
 	dump.Heap = append(dump.Heap, "inp/"+Basename(molprofile))
 	return
@@ -361,40 +369,68 @@ func RefEnergy(names []string, coords []float64, dump *GarbageHeap) (energy floa
 
 func PrintFile15(fc [][]float64, natoms int, filename string) int {
 	f, _ := os.Create(filename)
-	fmt.Fprintf(f, "%5d%5d", natoms, 6*natoms) // still not sure why this is just times 6
+	_, err := fmt.Fprintf(f, "%5d%5d", natoms, 6*natoms) // still not sure why this is just times 6
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "FprintF: %v\n", ErrFprintf)
+	}
 	flat := make([]float64, 0)
 	for _, v := range fc {
 		flat = append(flat, v...)
 	}
 	for i := range flat {
 		if i%3 == 0 {
-			fmt.Fprintf(f, "\n")
+			_, err = fmt.Fprintf(f, "\n")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "FprintF: %v\n", ErrFprintf)
+			}
 		}
-		fmt.Fprintf(f, "%20.10f", flat[i]*fc2Scale)
+		_, err := fmt.Fprintf(f, "%20.10f", flat[i]*fc2Scale)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "FprintF: %v\n", ErrFprintf)
+		}
 	}
 	return len(flat)
 }
 
 func PrintFile30(fc []float64, natoms, other int, filename string) int {
 	f, _ := os.Create(filename)
-	fmt.Fprintf(f, "%5d%5d", natoms, other)
+	_, err := fmt.Fprintf(f, "%5d%5d", natoms, other)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "FprintF: %v\n", ErrFprintf)
+	}
 	for i := range fc {
 		if i%3 == 0 {
-			fmt.Fprintf(f, "\n")
+			_, err := fmt.Fprintf(f, "\n")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "FprintF: %v\n", ErrFprintf)
+			}
 		}
-		fmt.Fprintf(f, "%20.10f", fc[i]*fc3Scale)
+		_, err := fmt.Fprintf(f, "%20.10f", fc[i]*fc3Scale)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "FprintF: %v\n", ErrFprintf)
+		}
 	}
 	return len(fc)
 }
 
 func PrintFile40(fc []float64, natoms, other int, filename string) int {
 	f, _ := os.Create(filename)
-	fmt.Fprintf(f, "%5d%5d", natoms, other)
+	_, err := fmt.Fprintf(f, "%5d%5d", natoms, other)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "FprintF: %v\n", err)
+	}
+
 	for i := range fc {
 		if i%3 == 0 {
-			fmt.Fprintf(f, "\n")
+			_, err := fmt.Fprintf(f, "\n")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "FprintF: %v\n", err)
+			}
 		}
-		fmt.Fprintf(f, "%20.10f", fc[i]*fc4Scale)
+		_, err := fmt.Fprintf(f, "%20.10f", fc[i]*fc4Scale)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "FprintF: %v\n", err)
+		}
 	}
 	return len(fc)
 }
@@ -409,7 +445,7 @@ func IntAbs(n int) int {
 func Drain(jobs []Job, names []string, coords []float64, wg *sync.WaitGroup,
 	ch chan int, totalJobs int, dump *GarbageHeap, E0 float64) {
 
-	for job, _ := range jobs {
+	for job := range jobs {
 		wg.Add(1)
 		workers++
 		ch <- 1
@@ -449,13 +485,28 @@ func TotalJobs(nd, ncoords int) (total int) {
 
 func MakeCheckpoint() {
 	fc2Json, _ := json.Marshal(fc2Done)
-	ioutil.WriteFile("fc2.json", fc2Json, 0755)
+	fc2err := ioutil.WriteFile("fc2.json", fc2Json, 0755)
+	if fc2err != nil {
+		log.Fatalf("%v", fc2err)
+	}
+
 	fc3Json, _ := json.Marshal(fc3Done)
-	ioutil.WriteFile("fc3.json", fc3Json, 0755)
+	fc3err := ioutil.WriteFile("fc3.json", fc3Json, 0755)
+	if fc3err != nil {
+		log.Fatalf("%v", fc3err)
+	}
+
 	fc4Json, _ := json.Marshal(fc4Done)
-	ioutil.WriteFile("fc4.json", fc4Json, 0755)
+	fc4err := ioutil.WriteFile("fc4.json", fc4Json, 0755)
+	if fc4err != nil {
+		log.Fatalf("%v", fc4err)
+	}
+
 	e2dJson, _ := json.Marshal(e2d)
-	ioutil.WriteFile("e2d.json", e2dJson, 0755)
+	ed2err := ioutil.WriteFile("e2d.json", e2dJson, 0755)
+	if ed2err != nil {
+		log.Fatalf("%v", ed2err)
+	}
 }
 
 func ReadCheckpoint() {
@@ -600,11 +651,20 @@ func main() {
 	}
 
 	if _, err := os.Stat("inp/"); os.IsNotExist(err) {
-		os.Mkdir("inp", 0755)
+		err := os.Mkdir("inp", 0755)
+		if err != nil {
+			fmt.Printf("%v", err)
+		}
 	} else {
 		if overwrite {
-			os.RemoveAll("inp/")
-			os.Mkdir("inp", 0755)
+			err := os.RemoveAll("inp/")
+			if err != nil {
+				fmt.Printf("%v", err)
+			}
+			err2 := os.Mkdir("inp", 0755)
+			if err2 != nil {
+				fmt.Printf("%v", err)
+			}
 		} else {
 			panic("Directory inp already exists, overwrite with -o")
 		}
