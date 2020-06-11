@@ -19,7 +19,7 @@ const (
 	BasisKey
 	ChargeKey
 	SpinKey
-	NumKeys
+//	NumKeys -- Unused variable.
 )
 
 func (k Key) String() string {
@@ -49,18 +49,18 @@ func ParseInfile(filename string) map[Key]string {
 		panic(err)
 	}
 	keymap := map[Key]string{}
-
+// Unnecessary type declarations.
 	Keywords := []Regexp{
-		Regexp{regexp.MustCompile(`(?i)concjobs=`), ConcJobKey},
-		Regexp{regexp.MustCompile(`(?i)derivative=`), DLevelKey},
-		Regexp{regexp.MustCompile(`(?i)queuetype=`), QueueTypeKey},
-		Regexp{regexp.MustCompile(`(?i)chkinterval=`), ChkIntervalKey},
-		Regexp{regexp.MustCompile(`(?i)program=`), ProgKey},
-		Regexp{regexp.MustCompile(`(?i)delta=`), DeltaKey},
-		Regexp{regexp.MustCompile(`(?i)method=`), MethodKey},
-		Regexp{regexp.MustCompile(`(?i)basis=`), BasisKey},
-		Regexp{regexp.MustCompile(`(?i)charge=`), ChargeKey},
-		Regexp{regexp.MustCompile(`(?i)spin=`), SpinKey},
+		{regexp.MustCompile(`(?i)concjobs=`), ConcJobKey},
+		{regexp.MustCompile(`(?i)derivative=`), DLevelKey},
+		{regexp.MustCompile(`(?i)queuetype=`), QueueTypeKey},
+		{regexp.MustCompile(`(?i)chkinterval=`), ChkIntervalKey},
+		{regexp.MustCompile(`(?i)program=`), ProgKey},
+		{regexp.MustCompile(`(?i)delta=`), DeltaKey},
+		{regexp.MustCompile(`(?i)method=`), MethodKey},
+		{regexp.MustCompile(`(?i)basis=`), BasisKey},
+		{regexp.MustCompile(`(?i)charge=`), ChargeKey},
+		{regexp.MustCompile(`(?i)spin=`), SpinKey},
 	}
 	geom := regexp.MustCompile(`(?i)geometry={`)
 	for i := 0; i < len(lines); {
