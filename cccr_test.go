@@ -38,6 +38,8 @@ func TestReadCcCROut(t *testing.T) {
 }
 
 const cccr_want = `memory,1125,m
+gthresh,energy=1.d-10,zero=1.d-16,oneint=1.d-16,twoint=1.d-16;
+gthresh,optgrad=1.d-8,optstep=1.d-8;
 nocompress
 geomtyp=xyz
 angstrom
@@ -49,26 +51,26 @@ H 0.0000000000 0.0000000000 -1.6233163510
 set,charge=0
 set,spin=0
 basis=avtz
-hf
-{ccsd(t)}
+{hf,maxit=500;accu,20;}
+{ccsd(t),nocheck,maxit=250;orbital,IGNORE_ERROR;}
 etz=energy
 basis=avqz
-hf
-{ccsd(t)}
+{hf,maxit=500;accu,20;}
+{ccsd(t),nocheck,maxit=250;orbital,IGNORE_ERROR;}
 eqz=energy
 basis=av5z
-hf
-{ccsd(t)}
+{hf,maxit=500;accu,20;}
+{ccsd(t),nocheck,maxit=250;orbital,IGNORE_ERROR;}
 e5z=energy
 basis=vtz-dk
 dkroll=0
-hf
-{ccsd(t)}
+{hf,maxit=500;accu,20;}
+{ccsd(t),nocheck,maxit=250;orbital,IGNORE_ERROR;}
 edk=energy
 basis=vtz-dk
 dkroll=1
-hf
-{ccsd(t)}
+{hf,maxit=500;accu,20;}
+{ccsd(t),nocheck,maxit=250;orbital,IGNORE_ERROR;}
 edkr=energy
 dkroll=0
 basis={
@@ -96,8 +98,8 @@ p,Mg,1.310,0.4911,0.2364,0.08733,0.03237,0.00745;
 d,Mg,1.601,0.686,0.126,0.294,0.0468;
 f,Mg,1.372,0.588,0.094,0.252;
 }
-hf
-{ccsd(t)}
+{hf,maxit=500;accu,20;}
+{ccsd(t),nocheck,maxit=250;orbital,IGNORE_ERROR;}
 emt=energy
 basis={
 default=aug-cc-pvtz
@@ -124,7 +126,7 @@ p,Mg,1.310,0.4911,0.2364,0.08733,0.03237,0.00745;
 d,Mg,1.601,0.686,0.126,0.294,0.0468;
 f,Mg,1.372,0.588,0.094,0.252;
 }
-hf
-{ccsd(t);core}
+{hf,maxit=500;accu,20;}
+{ccsd(t),nocheck,maxit=250;orbital,IGNORE_ERROR;core}
 emtc=energy
 cccre=etz-((eqz-etz)/(4.5^(-4)-3.5^(-4)))*3.5^(-4)+((e5z-etz+((eqz-etz)/(4.5^(-4)-3.5^(-4)))*(3.5^(-4)-5.5^(-4)))/(0.7477488413*((3.5^(-4)-5.5^(-4)))-3.5^(-6)+5.5^(-6)))*((0.7477488413*(3.5^(-4)))-3.5^(-6))+emtc-emt+edkr-edk`

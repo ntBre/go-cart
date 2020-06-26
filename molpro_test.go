@@ -10,6 +10,8 @@ import (
 func TestMakeMolproIn(t *testing.T) {
 	want := []string{
 		"memory,1125,m",
+		"gthresh,energy=1.d-10,zero=1.d-16,oneint=1.d-16,twoint=1.d-16;",
+		"gthresh,optgrad=1.d-8,optstep=1.d-8;",
 		"nocompress",
 		"geomtyp=xyz",
 		"angstrom",
@@ -21,8 +23,8 @@ func TestMakeMolproIn(t *testing.T) {
 		"basis=cc-pVTZ-F12",
 		"set,charge=0",
 		"set,spin=0",
-		"hf",
-		"{CCSD(T)-F12}"}
+		"hf,accuracy=16,energy=1.0d-10",
+		"{CCSD(T)-F12,thrden=1.0d-8,thrvar=1.0d-10}"}
 	got := TestProg.MakeIn(testnames, testcoords)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %#v\nwanted %#v\n", got, want)

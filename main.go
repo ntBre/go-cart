@@ -212,6 +212,11 @@ func Index4(x, y, z, w int) int {
 
 func HandleSignal(sig int, timeout time.Duration) error {
 	sigChan := make(chan os.Signal, 1)
+	// trying to stop goroutine leak
+	// stop receiving signals to send on channel
+	// then close the channel
+	defer signal.Stop(sigChan)
+	defer close(sigChan)
 	sig1Want := os.Signal(syscall.Signal(sig))
 	signal.Notify(sigChan, sig1Want)
 	select {

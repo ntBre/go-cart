@@ -13,6 +13,7 @@ type Molpro struct{}
 func (m Molpro) MakeHead() []string {
 	return []string{"memory,1125,m",
 		"gthresh,energy=1.d-10,zero=1.d-16,oneint=1.d-16,twoint=1.d-16;",
+		"gthresh,optgrad=1.d-8,optstep=1.d-8;",
 		"nocompress",
 		"geomtyp=xyz",
 		"angstrom",
