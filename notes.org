@@ -1,24 +1,35 @@
-* Call signature:
-  - go-cart <input file>
-    
+* TODO reduce the number of pbs jobs by combining multiple calculations
+  - requested by Ben Pharr
+    - "you're burning almost as much CPU time submitting as with the calculations"
+  - can include multiple geometries/hf/ccsd(t) blocks in molpro
+    - let it handle all of the energies for a force constant and spit out the fc
+  - should see what I can do about combining those into fewer pbs scripts too after that
+
+* TODO need to handle error in output, tighter convergence will require this
+  - already seen it with jax's
+
+* TODO test cccr
+
+* TODO update progress correctly if resuming from checkpoint
+
+* WAIT make sure new panic feature doesnt break anything
+  - hasn't yet
+
 * bh3nh3 started at 14:31 13 May 2020
   - going to crash because of third output file not divisible by 3
     
 * water fourths on eland in 10 minutes!!!
 * 2h6m on maple lol
   
-* TODO need to handle error in output, tighter convergence will require this
-  - already seen it with jax's
+* DONE put this in the custom help message
+  - Call signature:
+    - go-cart <input file>
+    
+* DONE might need to change energy line now that energy= is in input
+  - okay because no spaces to split on in the input lines
 
-* TODO might need to change energy line now that energy= is in input
-
-* TODO test cccr
-
-* TODO make sure new panic feature doesnt break anything
-
-* TODO update progress correctly if resuming from checkpoint
-
-* TODO figure out why Jax's first run didn't work
+* DONE figure out why Jax's first run didn't work
+  - timing out, increased walltime in pbs scripts
   - many jobs crashed at once and then nothing would budge
   - maybe check age of the output file and resubmit if too long since written to
   - 6/8 update crashed again and locked him out; added panic option to output file
@@ -66,7 +77,6 @@
 * DONE take command line flags
   - c continue from checkpoint
   - o to overwrite inp
-  - h for help
 
 * DONE figure out slurm submission to get maximum number of jobs running at once
 

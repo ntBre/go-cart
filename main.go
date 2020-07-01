@@ -92,9 +92,15 @@ var (
 
 // Command line flags
 var (
-	checkpoint bool
-	help       bool
-	overwrite  bool
+	checkpoint = flag.Bool("c", false, "resume from checkpoint")
+	overwrite  = flag.Bool("o", false, "overwrite existing inp directory")
+)
+
+const (
+	help = `Requires:
+- gocart input file, with a geometry in Angstroms
+Flags:
+`
 )
 
 func ReadFile(filename string) ([]string, error) {
@@ -531,10 +537,13 @@ func SetParams(filename string) (names []string, coords []float64, err error) {
 	return
 }
 
+// ParseFlags parses the command line flags and returns the remaining
+// arguments.
 func ParseFlags() []string {
-	flag.BoolVar(&help, "h", false, "list the command line options")
-	flag.BoolVar(&overwrite, "o", false, "overwrite existing inp directory")
-	flag.BoolVar(&checkpoint, "c", false, "resume from checkpoint")
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), help)
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	return flag.Args()
 }
@@ -587,11 +596,6 @@ func main() {
 
 	Args := ParseFlags()
 
-	if help {
-		flag.PrintDefaults()
-		os.Exit(0)
-	}
-
 	switch len(Args) {
 	case 0:
 		panic("Input file not found in command line args")
@@ -607,7 +611,7 @@ func main() {
 	if _, err := os.Stat("inp/"); os.IsNotExist(err) {
 		os.Mkdir("inp", 0755)
 	} else {
-		if overwrite {
+		if *overwrite {
 			os.RemoveAll("inp/")
 			os.Mkdir("inp", 0755)
 		} else {
@@ -617,7 +621,7 @@ func main() {
 
 	other3, other4 := InitFCArrays(ncoords)
 
-	if checkpoint {
+	if *checkpoint {
 		ReadCheckpoint()
 	}
 
