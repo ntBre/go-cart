@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"math"
 	"os/exec"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 var (
@@ -77,7 +79,7 @@ func TestReadFile(t *testing.T) {
 }
 
 func TestSplitLine(t *testing.T) {
-	got := SplitLine("H          0.0000000000        0.7574590974        0.5217905143")
+	got := strings.Fields("H          0.0000000000        0.7574590974        0.5217905143")
 	want := []string{"H", "0.0000000000", "0.7574590974", "0.5217905143"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %s, wanted %v\n", got, want)
@@ -124,7 +126,7 @@ func TestStep(t *testing.T) {
 	approxeq := func(a, b []float64) (eq bool) {
 		eps := 1e-6
 		eq = true
-		for i, _ := range a {
+		for i := range a {
 			if math.Abs(a[i]-b[i]) > eps {
 				eq = false
 				return

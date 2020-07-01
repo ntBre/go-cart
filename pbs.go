@@ -8,9 +8,10 @@ import (
 	"time"
 )
 
+// PBS implements the Submission interface
 type PBS struct{}
-// implements Submission
 
+// MakeHead makes a header for a PBS input file
 func (p PBS) MakeHead() []string {
 	return []string{"#!/bin/sh",
 		"#PBS -N go-cart",
@@ -32,17 +33,21 @@ func (p PBS) MakeHead() []string {
 		"date"}
 }
 
+// MakeFoot makes a footer for a PBS input file
 func (p PBS) MakeFoot(Sig1 int, dump *GarbageHeap) []string {
 	sig1 := strconv.Itoa(Sig1)
 	return []string{"ssh -t maple pkill -" + sig1 + " " + progName,
 		strings.Join(dump.Dump(), "\n"), "rm -rf $TMPDIR"}
 }
 
+// Make calls MakeHead and MakeFoot to generate a PBS input file
 func (p PBS) Make(filename string, Sig1 int, dump *GarbageHeap) []string {
 	body := []string{"molpro -t 1 " + filename}
 	return MakeInput(p.MakeHead(), p.MakeFoot(Sig1, dump), body)
 }
 
+// Write uses Make to write the contents of a PBS input file to
+// filename
 func (p PBS) Write(pbsfile, molprofile string, Sig1 int, dump *GarbageHeap) {
 	lines := p.Make(molprofile, Sig1, dump)
 	writelines := strings.Join(lines, "\n")
@@ -52,6 +57,7 @@ func (p PBS) Write(pbsfile, molprofile string, Sig1 int, dump *GarbageHeap) {
 	}
 }
 
+// Submit executes the qsub command on filename
 func (p PBS) Submit(filename string) int {
 	// -f option to run qsub in foreground
 	out, err := exec.Command("qsub", "-f", filename).Output()

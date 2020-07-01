@@ -13,7 +13,7 @@ func TestMakeCcCRIn(t *testing.T) {
 		[]float64{0.000000000, 0.000000000, -0.557831285,
 			0.000000000, 0.000000000, 0.595166388,
 			0.000000000, 0.000000000, -1.623316351}), "\n")
-	want := cccr_want
+	want := cccrWant
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, wanted %v\n", got, want)
 	}
@@ -37,7 +37,7 @@ func TestReadCcCROut(t *testing.T) {
 	energyLine = "energy="
 }
 
-const cccr_want = `memory,1125,m
+const cccrWant = `memory,1125,m
 gthresh,energy=1.d-10,zero=1.d-16,oneint=1.d-16,twoint=1.d-16;
 gthresh,optgrad=1.d-8,optstep=1.d-8;
 nocompress

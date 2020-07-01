@@ -35,6 +35,7 @@ f,Mg,1.372,0.588,0.094,0.252;`
 // CcCR is implemented as a Program, assuming Molpro
 type CcCR struct{}
 
+// MakeHead returns the header for a CcCR Molpro input file
 func (c CcCR) MakeHead() []string {
 	return []string{"memory,1125,m",
 		"gthresh,energy=1.d-10,zero=1.d-16,oneint=1.d-16,twoint=1.d-16;",
@@ -45,6 +46,7 @@ func (c CcCR) MakeHead() []string {
 		"geometry={"}
 }
 
+// MakeFoot returns the footer for a CcCR Molpro input file
 func (c CcCR) MakeFoot() []string {
 	return []string{"}",
 		"set,charge=" + charge,
@@ -99,9 +101,10 @@ func (c CcCR) MakeFoot() []string {
 	}
 }
 
+// MakeIn returns a CcCR Molpro input file as a slice of strings
 func (c CcCR) MakeIn(names []string, coords []float64) []string {
 	body := make([]string, 0)
-	for i, _ := range names {
+	for i := range names {
 		tmp := make([]string, 0)
 		tmp = append(tmp, names[i])
 		for _, c := range coords[3*i : 3*i+3] {
@@ -113,6 +116,7 @@ func (c CcCR) MakeIn(names []string, coords []float64) []string {
 	return MakeInput(c.MakeHead(), c.MakeFoot(), body)
 }
 
+// WriteIn uses MakeIn to write a CcCR Molpro input file to filename
 func (c CcCR) WriteIn(filename string, names []string, coords []float64) {
 	lines := c.MakeIn(names, coords)
 	writelines := strings.Join(lines, "\n")
@@ -122,6 +126,8 @@ func (c CcCR) WriteIn(filename string, names []string, coords []float64) {
 	}
 }
 
+// ReadOut reads a CcCR Molpro output file and returns the resulting
+// energy
 func (c CcCR) ReadOut(filename string) (result float64, err error) {
 	runtime.LockOSThread()
 	if _, err = os.Stat(filename); os.IsNotExist(err) {
@@ -144,8 +150,8 @@ func (c CcCR) ReadOut(filename string) (result float64, err error) {
 			return result, ErrFileContainsError
 		}
 		if strings.Contains(line, energyLine) {
-			split := SplitLine(line)
-			for i, _ := range split {
+			split := strings.Fields(line)
+			for i := range split {
 				if strings.Contains(split[i], energyLine) {
 					// take the thing right after search term
 					// not the last entry in the line

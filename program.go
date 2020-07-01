@@ -1,5 +1,6 @@
 package main
 
+// Program is an interface for quantum chemistry programs
 type Program interface {
 	MakeHead() []string
 	MakeFoot() []string

@@ -5,8 +5,10 @@ import (
 	"strings"
 )
 
+// Key is a custom type used as the keys in the Input map
 type Key int
 
+// Keys for Input map
 const (
 	ConcJobKey Key = iota
 	DLevelKey
@@ -38,11 +40,14 @@ func (k Key) String() string {
 	}[k]
 }
 
+// Regexp consists of an embedded *regexp.Regexp and an associated Key
 type Regexp struct {
-	Expr *regexp.Regexp
+	*regexp.Regexp
 	Name Key
 }
 
+// ParseInfile parses filename and loads matching keywords into the
+// returned map
 func ParseInfile(filename string) map[Key]string {
 	lines, err := ReadFile(filename)
 	if err != nil {
@@ -81,7 +86,7 @@ func ParseInfile(filename string) map[Key]string {
 			keymap[GeomKey] = strings.Join(geomlines, "\n")
 		} else {
 			for _, kword := range Keywords {
-				if kword.Expr.MatchString(lines[i]) {
+				if kword.MatchString(lines[i]) {
 					split := strings.Split(lines[i], "=")
 					keymap[kword.Name] = strings.ToUpper(split[len(split)-1])
 				}

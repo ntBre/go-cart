@@ -1,5 +1,7 @@
 package main
 
+// Make2D makes the Job slices for finite differences second
+// derivative force constants
 func Make2D(i, j int) []Job {
 	switch {
 	case i == j:
@@ -20,6 +22,8 @@ func Make2D(i, j int) []Job {
 	}
 }
 
+// Make3D makes the Job slices for finite differences third derivative
+// force constants
 func Make3D(i, j, k int) []Job {
 	switch {
 	case i == j && i == k:
@@ -68,6 +72,8 @@ func Make3D(i, j, k int) []Job {
 	}
 }
 
+// Make4D makes the Job slices for finite differences fourth
+// derivative force constants
 func Make4D(i, j, k, l int) []Job {
 	switch {
 	// all the same
@@ -268,6 +274,7 @@ func Make4D(i, j, k, l int) []Job {
 	}
 }
 
+// Derivative is a helper for calling Make(2|3|4)D in the same way
 func Derivative(dims ...int) []Job {
 	switch len(dims) {
 	case 2:

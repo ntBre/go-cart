@@ -8,8 +8,10 @@ import (
 	"strings"
 )
 
+// Molpro implements the Program interface
 type Molpro struct{}
 
+// MakeHead makes a header for a Molpro input file
 func (m Molpro) MakeHead() []string {
 	return []string{"memory,1125,m",
 		"gthresh,energy=1.d-10,zero=1.d-16,oneint=1.d-16,twoint=1.d-16;",
@@ -20,6 +22,7 @@ func (m Molpro) MakeHead() []string {
 		"geometry={"}
 }
 
+// MakeFoot makes a footer for a Molpro input file
 func (m Molpro) MakeFoot() []string {
 	return []string{"}",
 		"basis=" + basis,
@@ -29,9 +32,10 @@ func (m Molpro) MakeFoot() []string {
 		"{" + molproMethod + ",thrden=1.0d-8,thrvar=1.0d-10}"}
 }
 
+// MakeIn makes a Molpro input file
 func (m Molpro) MakeIn(names []string, coords []float64) []string {
 	body := make([]string, 0)
-	for i, _ := range names {
+	for i := range names {
 		tmp := make([]string, 0)
 		tmp = append(tmp, names[i])
 		for _, c := range coords[3*i : 3*i+3] {
@@ -43,6 +47,8 @@ func (m Molpro) MakeIn(names []string, coords []float64) []string {
 	return MakeInput(m.MakeHead(), m.MakeFoot(), body)
 }
 
+// WriteIn writes the contents of a Molpro input file to filename as
+// produced by MakeIn
 func (m Molpro) WriteIn(filename string, names []string, coords []float64) {
 	lines := m.MakeIn(names, coords)
 	writelines := strings.Join(lines, "\n")
@@ -52,6 +58,7 @@ func (m Molpro) WriteIn(filename string, names []string, coords []float64) {
 	}
 }
 
+// ReadOut reads a Molpro output file and returns the resulting energy
 func (m Molpro) ReadOut(filename string) (result float64, err error) {
 	runtime.LockOSThread()
 	if _, err = os.Stat(filename); os.IsNotExist(err) {
@@ -78,8 +85,8 @@ func (m Molpro) ReadOut(filename string) (result float64, err error) {
 			return result, ErrFileContainsError
 		}
 		if strings.Contains(line, energyLine) {
-			split := SplitLine(line)
-			for i, _ := range split {
+			split := strings.Fields(line)
+			for i := range split {
 				if strings.Contains(split[i], energyLine) {
 					// take the thing right after search term
 					// not the last entry in the line

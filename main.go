@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,10 +23,15 @@ const (
 	molproTerminated = "Molpro calculation terminated"
 	angbohr          = 0.529177249
 	progName         = "go-cart"
-	RTMIN            = 35
-	RTMAX            = 64
 )
 
+// Real time signals
+const (
+	RTMIN = 35
+	RTMAX = 64
+)
+
+// Finite differences denominators
 var (
 	fc2Scale = angbohr * angbohr / (4 * delta * delta)
 	fc3Scale = angbohr * angbohr * angbohr / (8 * delta * delta * delta)
@@ -96,6 +100,7 @@ var (
 	overwrite  = flag.Bool("o", false, "overwrite existing inp directory")
 )
 
+// Custom help message
 const (
 	help = `Requires:
 - gocart input file, with a geometry in Angstroms
@@ -103,6 +108,7 @@ Flags:
 `
 )
 
+// ReadFile reads filename and returns its lines with white space trimmed
 func ReadFile(filename string) ([]string, error) {
 	lines, err := ioutil.ReadFile(filename)
 	// trim trailing newlines
@@ -113,20 +119,15 @@ func ReadFile(filename string) ([]string, error) {
 	return split, err
 }
 
-func SplitLine(line string) []string {
-	re := regexp.MustCompile(`\s+`)
-	trim := strings.TrimSpace(line)
-	s := strings.Split(strings.TrimSpace(re.ReplaceAllString(trim, " ")), " ")
-	return s
-}
-
+// ReadInputXYZ reads the input Cartesian geometry and returns slices
+// of the atom names and the coordinates
 func ReadInputXYZ(split []string) ([]string, []float64) {
 	// split, _ := ReadFile(filename)
 	names := make([]string, 0)
 	coords := make([]float64, 0)
 	// skip the natoms and comment line in xyz file
 	for _, v := range split[2:] {
-		s := SplitLine(v)
+		s := strings.Fields(v)
 		if len(s) == 4 {
 			names = append(names, s[0])
 			for _, c := range s[1:4] {
@@ -141,25 +142,30 @@ func ReadInputXYZ(split []string) ([]string, []float64) {
 	return names, coords
 }
 
+// MakeInput combines slices of head, foot, and body into a single
+// slice
 func MakeInput(head, foot, body []string) []string {
-	file := make([]string, 0)
+	file := make([]string, 0, len(head)+len(foot)+len(body))
 	file = append(file, head...)
 	file = append(file, body...)
 	file = append(file, foot...)
 	return file
 }
 
+// Basename returns the name of the file with no leading path or
+// extension
 func Basename(filename string) string {
 	file := path.Base(filename)
-	re := regexp.MustCompile(path.Ext(file))
-	basename := re.ReplaceAllString(file, "")
-	return basename
+	return file[:len(file)-len(path.Ext(file))]
 }
 
+// GarbageHeap is a slice of Basenames to be deleted
 type GarbageHeap struct {
 	Heap []string // list of basenames
 }
 
+// Dump returns a slice of strings of files prefixed by "rm" for
+// deletion
 func (g *GarbageHeap) Dump() []string {
 	dump := make([]string, 0)
 	for _, v := range g.Heap {
@@ -169,6 +175,8 @@ func (g *GarbageHeap) Dump() []string {
 	return dump
 }
 
+// Job is a type for holding the information associated with a force
+// constant component
 type Job struct {
 	Coeff   float64
 	Name    string
@@ -181,6 +189,7 @@ type Job struct {
 	Result  float64
 }
 
+// Step adjusts coords by delta in the steps indices
 func Step(coords []float64, steps ...int) []float64 {
 	var c = make([]float64, len(coords))
 	copy(c, coords)
@@ -195,12 +204,14 @@ func Step(coords []float64, steps ...int) []float64 {
 	return c
 }
 
+// HashName returns a hashed filename
 func HashName() string {
 	var h maphash.Hash
 	h.SetSeed(maphash.MakeSeed())
 	return "job" + strconv.FormatUint(h.Sum64(), 16)
 }
 
+// E2dIndex converts n to an index in E2d
 func E2dIndex(n, ncoords int) int {
 	if n < 0 {
 		return IntAbs(n) + ncoords - 1
@@ -208,14 +219,20 @@ func E2dIndex(n, ncoords int) int {
 	return n - 1
 }
 
+// Index3 returns the index in the third derivative array expected by SPECTRO
+// corresponding to x, y, and z
 func Index3(x, y, z int) int {
 	return x + (y-1)*y/2 + (z-1)*z*(z+1)/6 - 1
 }
 
+// Index4 returns the index in the fourth derivative array expected by
+// SPECTRO corresponding to x, y, z and w
 func Index4(x, y, z, w int) int {
 	return x + (y-1)*y/2 + (z-1)*z*(z+1)/6 + (w-1)*w*(w+1)*(w+2)/24 - 1
 }
 
+// HandleSignal receives a signal or times out. The error returned is
+// for debugging purposes to differentiate the two
 func HandleSignal(sig int, timeout time.Duration) error {
 	sigChan := make(chan os.Signal, 1)
 	// trying to stop goroutine leak
@@ -237,6 +254,7 @@ func HandleSignal(sig int, timeout time.Duration) error {
 	}
 }
 
+// QueueAndWait submits a Job to the Queue and waits on the result
 func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	ch chan int, totalJobs int, dump *GarbageHeap, E0 float64) {
 
@@ -354,6 +372,8 @@ func QueueAndWait(job Job, names []string, coords []float64, wg *sync.WaitGroup,
 	<-ch
 }
 
+// RefEnergy is similar to QueueAndWait but specifically for the
+// initial reference geometry
 func RefEnergy(names []string, coords []float64, dump *GarbageHeap) (energy float64) {
 	molprofile := "inp/ref.inp"
 	pbsfile := "inp/ref.pbs"
@@ -370,6 +390,8 @@ func RefEnergy(names []string, coords []float64, dump *GarbageHeap) (energy floa
 	return
 }
 
+// PrintFile15 prints the second derivative force constants in the
+// format expected by SPECTRO
 func PrintFile15(fc [][]float64, natoms int, filename string) int {
 	f, _ := os.Create(filename)
 	fmt.Fprintf(f, "%5d%5d", natoms, 6*natoms) // still not sure why this is just times 6
@@ -386,6 +408,8 @@ func PrintFile15(fc [][]float64, natoms int, filename string) int {
 	return len(flat)
 }
 
+// PrintFile30 prints the third derivative force constants in the
+// format expected by SPECTRO
 func PrintFile30(fc []float64, natoms, other int, filename string) int {
 	f, _ := os.Create(filename)
 	fmt.Fprintf(f, "%5d%5d", natoms, other)
@@ -398,6 +422,8 @@ func PrintFile30(fc []float64, natoms, other int, filename string) int {
 	return len(fc)
 }
 
+// PrintFile40 prints the fourth derivative force constants in the
+// format expected by SPECTRO
 func PrintFile40(fc []float64, natoms, other int, filename string) int {
 	f, _ := os.Create(filename)
 	fmt.Fprintf(f, "%5d%5d", natoms, other)
@@ -410,6 +436,7 @@ func PrintFile40(fc []float64, natoms, other int, filename string) int {
 	return len(fc)
 }
 
+// IntAbs returns the absolute value of n
 func IntAbs(n int) int {
 	if n < 0 {
 		return -1 * n
@@ -417,10 +444,12 @@ func IntAbs(n int) int {
 	return n
 }
 
+// Drain takes a slice of Jobs and drains them individually into the
+// Queue
 func Drain(jobs []Job, names []string, coords []float64, wg *sync.WaitGroup,
 	ch chan int, totalJobs int, dump *GarbageHeap, E0 float64) {
 
-	for job, _ := range jobs {
+	for job := range jobs {
 		wg.Add(1)
 		workers++
 		ch <- 1
@@ -436,8 +465,10 @@ func Drain(jobs []Job, names []string, coords []float64, wg *sync.WaitGroup,
 	}
 }
 
+// TotalJobs calculates the total number of jobs necessary for a given
+// quartic force field.  This is a very dumb implementation of
+// something that should have a formula
 func TotalJobs(nd, ncoords int) (total int) {
-	// this is a disgusting way to calculate this
 	// 3 jobs for diagonal + 4 jobs for off diagonal
 	// totalJobs := ncoords*3 + (ncoords*ncoords-ncoords)*4
 	for i := 1; i <= ncoords; i++ {
@@ -458,17 +489,21 @@ func TotalJobs(nd, ncoords int) (total int) {
 	return
 }
 
+// MakeCheckpoint marshals the necessary data structures into JSON for
+// saving checkpoints and writes them to the checkpoint files
 func MakeCheckpoint() {
-	fc2Json, _ := json.Marshal(fc2Done)
-	ioutil.WriteFile("fc2.json", fc2Json, 0755)
-	fc3Json, _ := json.Marshal(fc3Done)
-	ioutil.WriteFile("fc3.json", fc3Json, 0755)
-	fc4Json, _ := json.Marshal(fc4Done)
-	ioutil.WriteFile("fc4.json", fc4Json, 0755)
-	e2dJson, _ := json.Marshal(e2d)
-	ioutil.WriteFile("e2d.json", e2dJson, 0755)
+	fc2JSON, _ := json.Marshal(fc2Done)
+	ioutil.WriteFile("fc2.json", fc2JSON, 0755)
+	fc3JSON, _ := json.Marshal(fc3Done)
+	ioutil.WriteFile("fc3.json", fc3JSON, 0755)
+	fc4JSON, _ := json.Marshal(fc4Done)
+	ioutil.WriteFile("fc4.json", fc4JSON, 0755)
+	e2dJSON, _ := json.Marshal(e2d)
+	ioutil.WriteFile("e2d.json", e2dJSON, 0755)
 }
 
+// ReadCheckpoint restores the force constant and useful second
+// derivative arrays from the JSON checkpoint files
 func ReadCheckpoint() {
 	fc2lines, _ := ioutil.ReadFile("fc2.json")
 	fc3lines, _ := ioutil.ReadFile("fc3.json")
@@ -487,6 +522,8 @@ func ReadCheckpoint() {
 	}
 }
 
+// SetParams uses the parsed input file values to set global
+// parameters
 func SetParams(filename string) (names []string, coords []float64, err error) {
 	err = ErrInputGeomNotFound
 	keymap := ParseInfile(filename)
@@ -538,7 +575,7 @@ func SetParams(filename string) (names []string, coords []float64, err error) {
 }
 
 // ParseFlags parses the command line flags and returns the remaining
-// arguments.
+// arguments
 func ParseFlags() []string {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), help)
@@ -556,6 +593,7 @@ but then have to check them all when marshalling so idk
 probably some other solution that is actually good
 */
 
+// InitFCArrays initializes the global force constant arrays
 func InitFCArrays(ncoords int) (int, int) {
 	fc2 = make([][]float64, ncoords)
 	fc2Done = make([][]float64, ncoords)
@@ -636,6 +674,8 @@ func main() {
 				jobs := Derivative(i, j)
 				fc2Count[i-1][j-1] = len(jobs)
 				Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, E0)
+			} else {
+				progress++
 			}
 			if nDerivative > 2 && j <= i {
 				for k := 1; k <= j; k++ {
@@ -647,7 +687,9 @@ func main() {
 						jobs := Derivative(i, j, k)
 						fc3Count[index] = len(jobs)
 						Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, E0)
-					} // else should increment progress and print for checkpoints
+					} else {
+						progress++
+					}
 					if nDerivative > 3 {
 						for l := 1; l <= k; l++ {
 							temp := []int{i, j, k, l}
@@ -657,6 +699,8 @@ func main() {
 								jobs := Derivative(i, j, k, l)
 								fc4Count[index] = len(jobs)
 								Drain(jobs, names, coords, &wg, ch, totalJobs, &dump, E0)
+							} else {
+								progress++
 							}
 						}
 					}
@@ -674,5 +718,4 @@ func main() {
 	if nDerivative > 3 {
 		PrintFile40(fc4, natoms, other4, "fort.40")
 	}
-
 }

@@ -2,6 +2,7 @@
   - requested by Ben Pharr
     - "you're burning almost as much CPU time submitting as with the calculations"
   - can include multiple geometries/hf/ccsd(t) blocks in molpro
+    - thought problem with reference geometry, but just include that as a number in calc
     - let it handle all of the energies for a force constant and spit out the fc
   - should see what I can do about combining those into fewer pbs scripts too after that
 
