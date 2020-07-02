@@ -1,4 +1,84 @@
+* Brainstorming
+  
+Big question about precision - need to ask
+
+problem is the number of files we have to write?
+combining all the individual jobs into a single pbs script does not reduce this problem
+still have to have the files for each one
+combining at the molpro level reduces the number of files by ~4-5
+possible reduction in precision? 12 decimals in energy= lines but only 8 in the custom variables in cccr
+potential problem in cccr too, ask about this
+
+if lumping many pbs together
+either add each component job into a list that needs to be checked
+or implement the queue checking function and just check when the pbs file finishes
+alternatively there wait for the pbs output file to be written - signals completion, no /dev/null
+
+can get rid of the signals if I just let pbs write output files
+when the output is written that means the job is done
+poll the existence of the file regularly
+should still use queue check to see if resubmission necessary if job gets lost
+reducing the number of pbs submisisons will likely help this losing problem
+can name the output file so it will be globbed by the rm name.* (name.pbs.out for example)
+
+any reduction in resource usage will allow more jobs to run in parallel, so it should speed up
+the process significantly even if the polling intervals are lower etc
+
+could also keep the signals if I really want by interleaving signals and jobs
+(molpro inp/name.inp; ssh maple -t pkill -RTMIN go-cart)
+but file monitoring is probably easier on resources? and more consistent when more than RTMAX-RTMIN jobs
+
+[[https://stackoverflow.com/questions/13281616/how-to-run-several-commands-in-one-pbs-job-submission][StackOverflow]] suggestion used wait at the end
+have to do this because otherwise the pbs job will exit as soon as they all submit in background
+
+ouch, this means the file monitoring only shows once all the jobs in the pbs file finish
+
+how many pbs files (clusters below) to run at once? == how many files to have at once basically
+between pbs groups I can delete files
+this idea changes the working unit from the job to the pbs cluster
+monitor for cluster to finish, then loop through contained jobs to see which were successful
+any failures need to be recycled into another cluster
+
+also have to request resources for all of these jobs at once?? so I need RN resources
+if R is the resources for a single job and N is the number of jobs in the cluster
+
+* TODO Ask Ben Pharr how to optimize this
+
+Hi Mr. Pharr,
+
+I've been thinking about how to improve my program, but I'm not sure
+what approach to take. Do you have any suggestions? I found a
+StackOverflow thread about combining multiple commands in one PBS
+submission by running each one in the background and then using the
+wait command to wait for those to finish. Is that the right approach
+if I were going to combine many of my calculations into one PBS
+submission? I can't believe nobody in my group does anything like
+this, it definitely seems like the better way to go instead of
+submitting thousands of individual jobs.
+
+In that case I would need to request a total amount of resources to
+cover all of the individual jobs right? The reason I ended up doing it
+the way I have so far is because Dr. Fortenberry was worried about the
+number of files being created, especially as we try it with larger and
+larger molecules. Is there some number of files I should try to stay
+below? What I'm thinking now is that that would determine how many of
+the PBS submissions I would need and I could grab what I need out of
+the output files and then delete them between those.
+
+I really just want to optimize the speed as much as possible so we can
+try those larger molecules, so I appreciate you pointing out a major
+bottleneck. Any additional suggestions you have would be very helpful
+too. Is there a way I can see the resource usage you mentioned in your
+last email? Just so I can see if newer versions have some improvement.
+
+Thank you,
+
+Brent Westbrook
+
 * TODO reduce the number of pbs jobs by combining multiple calculations
+  - maybe the molpro part is unnecessary if I can just do the pbs directly
+  - need to start work at the Drain/QueueAndWait interface
+    - Molpro.WriteIn obviously heavily involved too
   - requested by Ben Pharr
     - "you're burning almost as much CPU time submitting as with the calculations"
   - can include multiple geometries/hf/ccsd(t) blocks in molpro
@@ -6,22 +86,20 @@
     - let it handle all of the energies for a force constant and spit out the fc
   - should see what I can do about combining those into fewer pbs scripts too after that
 
-* TODO need to handle error in output, tighter convergence will require this
-  - already seen it with jax's
+* TODO need to handle molpro runtime error in output, tighter convergence will require this
+  - already seen it with jax's 
+  - like dsyevd errors or failed to converge
 
 * TODO test cccr
-
-* TODO update progress correctly if resuming from checkpoint
 
 * WAIT make sure new panic feature doesnt break anything
   - hasn't yet
 
-* bh3nh3 started at 14:31 13 May 2020
-  - going to crash because of third output file not divisible by 3
-    
 * water fourths on eland in 10 minutes!!!
 * 2h6m on maple lol
   
+* DONE update progress correctly if resuming from checkpoint
+
 * DONE put this in the custom help message
   - Call signature:
     - go-cart <input file>
