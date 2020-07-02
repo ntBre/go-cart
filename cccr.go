@@ -98,6 +98,7 @@ func (c CcCR) MakeFoot() []string {
 			"/(0.7477488413*((3.5^(-4)-5.5^(-4)))-3.5^(-6)+5.5^(-6)))" +
 			"*((0.7477488413*(3.5^(-4)))-3.5^(-6))" +
 			"+emtc-emt+edkr-edk",
+		"show[1,f20.12],cccre", /* print cccre in higher precision */
 	}
 }
 

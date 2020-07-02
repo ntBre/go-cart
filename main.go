@@ -548,6 +548,7 @@ func SetParams(filename string) (names []string, coords []float64, err error) {
 				Prog = Molpro{}
 			case "CCCR":
 				Prog = CcCR{}
+				// TODO update this, not SETTING, need higher precision one from show
 				energyLine = "SETTING CCCRE"
 			}
 		case GeomKey:

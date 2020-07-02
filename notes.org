@@ -1,6 +1,7 @@
 * Brainstorming
   
-Big question about precision - need to ask
+** DONE Big question about precision - need to ask
+   - show directive
 
 problem is the number of files we have to write?
 combining all the individual jobs into a single pbs script does not reduce this problem
@@ -74,6 +75,9 @@ last email? Just so I can see if newer versions have some improvement.
 Thank you,
 
 Brent Westbrook
+
+* TODO fix energyLine for cccr, now cccre present in two places
+  - need higher precision one, w/o SETTING
 
 * TODO reduce the number of pbs jobs by combining multiple calculations
   - maybe the molpro part is unnecessary if I can just do the pbs directly
