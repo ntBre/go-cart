@@ -1,49 +1,6 @@
-* Brainstorming
+* TODO Ask Ben Pharr how to optimize resource use
   
-** DONE Big question about precision - need to ask
-   - show directive
-
-problem is the number of files we have to write?
-combining all the individual jobs into a single pbs script does not reduce this problem
-still have to have the files for each one
-combining at the molpro level reduces the number of files by ~4-5
-possible reduction in precision? 12 decimals in energy= lines but only 8 in the custom variables in cccr
-potential problem in cccr too, ask about this
-
-if lumping many pbs together
-either add each component job into a list that needs to be checked
-or implement the queue checking function and just check when the pbs file finishes
-alternatively there wait for the pbs output file to be written - signals completion, no /dev/null
-
-can get rid of the signals if I just let pbs write output files
-when the output is written that means the job is done
-poll the existence of the file regularly
-should still use queue check to see if resubmission necessary if job gets lost
-reducing the number of pbs submisisons will likely help this losing problem
-can name the output file so it will be globbed by the rm name.* (name.pbs.out for example)
-
-any reduction in resource usage will allow more jobs to run in parallel, so it should speed up
-the process significantly even if the polling intervals are lower etc
-
-could also keep the signals if I really want by interleaving signals and jobs
-(molpro inp/name.inp; ssh maple -t pkill -RTMIN go-cart)
-but file monitoring is probably easier on resources? and more consistent when more than RTMAX-RTMIN jobs
-
-[[https://stackoverflow.com/questions/13281616/how-to-run-several-commands-in-one-pbs-job-submission][StackOverflow]] suggestion used wait at the end
-have to do this because otherwise the pbs job will exit as soon as they all submit in background
-
-ouch, this means the file monitoring only shows once all the jobs in the pbs file finish
-
-how many pbs files (clusters below) to run at once? == how many files to have at once basically
-between pbs groups I can delete files
-this idea changes the working unit from the job to the pbs cluster
-monitor for cluster to finish, then loop through contained jobs to see which were successful
-any failures need to be recycled into another cluster
-
-also have to request resources for all of these jobs at once?? so I need RN resources
-if R is the resources for a single job and N is the number of jobs in the cluster
-
-* TODO Ask Ben Pharr how to optimize this
+** Email
 
 Hi Mr. Pharr,
 
@@ -76,8 +33,47 @@ Thank you,
 
 Brent Westbrook
 
-* TODO fix energyLine for cccr, now cccre present in two places
-  - need higher precision one, w/o SETTING
+** Brainstorming
+  
+ problem is the number of files we have to write?
+ combining all the individual jobs into a single pbs script does not reduce this problem
+ still have to have the files for each one
+ combining at the molpro level reduces the number of files by ~4-5
+ possible reduction in precision? 12 decimals in energy= lines but only 8 in the custom variables in cccr
+ potential problem in cccr too, ask about this
+
+ if lumping many pbs together
+ either add each component job into a list that needs to be checked
+ or implement the queue checking function and just check when the pbs file finishes
+ alternatively there wait for the pbs output file to be written - signals completion, no /dev/null
+
+ can get rid of the signals if I just let pbs write output files
+ when the output is written that means the job is done
+ poll the existence of the file regularly
+ should still use queue check to see if resubmission necessary if job gets lost
+ reducing the number of pbs submisisons will likely help this losing problem
+ can name the output file so it will be globbed by the rm name.* (name.pbs.out for example)
+
+ any reduction in resource usage will allow more jobs to run in parallel, so it should speed up
+ the process significantly even if the polling intervals are lower etc
+
+ could also keep the signals if I really want by interleaving signals and jobs
+ (molpro inp/name.inp; ssh maple -t pkill -RTMIN go-cart)
+ but file monitoring is probably easier on resources? and more consistent when more than RTMAX-RTMIN jobs
+
+ [[https://stackoverflow.com/questions/13281616/how-to-run-several-commands-in-one-pbs-job-submission][StackOverflow]] suggestion used wait at the end
+ have to do this because otherwise the pbs job will exit as soon as they all submit in background
+
+ ouch, this means the file monitoring only shows once all the jobs in the pbs file finish
+
+ how many pbs files (clusters below) to run at once? == how many files to have at once basically
+ between pbs groups I can delete files
+ this idea changes the working unit from the job to the pbs cluster
+ monitor for cluster to finish, then loop through contained jobs to see which were successful
+ any failures need to be recycled into another cluster
+
+ also have to request resources for all of these jobs at once?? so I need RN resources
+ if R is the resources for a single job and N is the number of jobs in the cluster
 
 * TODO reduce the number of pbs jobs by combining multiple calculations
   - maybe the molpro part is unnecessary if I can just do the pbs directly
@@ -90,11 +86,14 @@ Brent Westbrook
     - let it handle all of the energies for a force constant and spit out the fc
   - should see what I can do about combining those into fewer pbs scripts too after that
 
+* TODO fix energyLine for cccr, now cccre present in two places
+** TODO test cccr
+  - need higher precision one, w/o SETTING
+  - probably need a regular expression for energyline to exclude SETTING
+
 * TODO need to handle molpro runtime error in output, tighter convergence will require this
   - already seen it with jax's 
   - like dsyevd errors or failed to converge
-
-* TODO test cccr
 
 * WAIT make sure new panic feature doesnt break anything
   - hasn't yet

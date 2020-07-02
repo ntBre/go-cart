@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -28,13 +29,14 @@ func TestWriteCcCRIn(t *testing.T) {
 }
 
 func TestReadCcCROut(t *testing.T) {
-	energyLine = "CCCRE"
+	temp := energyLine
+	energyLine = regexp.MustCompile(`^\s*CCCRE\s+=`)
+	defer func() { energyLine = temp }()
 	got, err := c.ReadOut("testfiles/cccr.out")
-	want := -93.47141676
+	want := -93.471416880846
 	if got != want {
 		t.Errorf("got %v, wanted %v, err %v\n", got, want, err)
 	}
-	energyLine = "energy="
 }
 
 const cccrWant = `memory,1125,m
@@ -129,4 +131,5 @@ f,Mg,1.372,0.588,0.094,0.252;
 {hf,maxit=500;accu,20;}
 {ccsd(t),nocheck,maxit=250;orbital,IGNORE_ERROR;core}
 emtc=energy
-cccre=etz-((eqz-etz)/(4.5^(-4)-3.5^(-4)))*3.5^(-4)+((e5z-etz+((eqz-etz)/(4.5^(-4)-3.5^(-4)))*(3.5^(-4)-5.5^(-4)))/(0.7477488413*((3.5^(-4)-5.5^(-4)))-3.5^(-6)+5.5^(-6)))*((0.7477488413*(3.5^(-4)))-3.5^(-6))+emtc-emt+edkr-edk`
+cccre=etz-((eqz-etz)/(4.5^(-4)-3.5^(-4)))*3.5^(-4)+((e5z-etz+((eqz-etz)/(4.5^(-4)-3.5^(-4)))*(3.5^(-4)-5.5^(-4)))/(0.7477488413*((3.5^(-4)-5.5^(-4)))-3.5^(-6)+5.5^(-6)))*((0.7477488413*(3.5^(-4)))-3.5^(-6))+emtc-emt+edkr-edk
+show[1,f20.12],cccre`

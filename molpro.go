@@ -84,10 +84,10 @@ func (m Molpro) ReadOut(filename string) (result float64, err error) {
 		if strings.Contains(strings.ToUpper(line), "ERROR") {
 			return result, ErrFileContainsError
 		}
-		if strings.Contains(line, energyLine) {
+		if energyLine.MatchString(line) {
 			split := strings.Fields(line)
 			for i := range split {
-				if strings.Contains(split[i], energyLine) {
+				if energyLine.MatchString(split[i]) {
 					// take the thing right after search term
 					// not the last entry in the line
 					if i+1 < len(split) {

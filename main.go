@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -63,7 +64,7 @@ var (
 	basis        string     = "cc-pVTZ-F12"
 	charge       string     = "0"
 	spin         string     = "0"
-	energyLine              = "energy="
+	energyLine              = regexp.MustCompile(`energy=`)
 )
 
 // Shared variables
@@ -548,8 +549,7 @@ func SetParams(filename string) (names []string, coords []float64, err error) {
 				Prog = Molpro{}
 			case "CCCR":
 				Prog = CcCR{}
-				// TODO update this, not SETTING, need higher precision one from show
-				energyLine = "SETTING CCCRE"
+				energyLine = regexp.MustCompile(`^\s+CCCRE\s+=`)
 			}
 		case GeomKey:
 			lines := strings.Split(value, "\n")
